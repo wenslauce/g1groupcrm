@@ -16,7 +16,9 @@ import {
   Plus,
   Search,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  Activity,
+  Eye
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -85,7 +87,9 @@ export function Sidebar({ className }: SidebarProps) {
       show: permissions.canManageUsers(),
       children: [
         { name: 'User Management', href: '/dashboard/admin/users', icon: Users, show: permissions.canManageUsers() },
-        { name: 'Audit Logs', href: '/dashboard/admin/audit', icon: FileText, show: permissions.canViewAuditLogs() },
+        { name: 'Audit Logs', href: '/dashboard/audit', icon: FileText, show: permissions.canViewAuditLogs() },
+        { name: 'Activity Monitor', href: '/dashboard/monitoring/activity', icon: Activity, show: permissions.canViewAuditLogs() },
+        { name: 'Security Monitor', href: '/dashboard/monitoring/security', icon: Shield, show: permissions.canManageUsers() },
       ].filter(child => child.show),
     },
   ].filter(item => item.show)

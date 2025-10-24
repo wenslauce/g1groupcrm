@@ -37,7 +37,7 @@ export type CreditNoteUpdate = Updates<'credit_notes'>
 export type UserProfileUpdate = Updates<'user_profiles'>
 export type AuditLogUpdate = Updates<'audit_logs'>
 
-// Extended Types with Relations
+// Extended Types with Relations\nexport interface TrackingRecord extends Tracking {\n  recorded_by_user?: {\n    id: string\n    name: string\n  }\n  isLatest?: boolean\n  previousLocation?: string\n  distanceTraveled?: number\n}
 export interface SKRWithRelations extends SKR {
   client?: Client
   asset?: Asset
@@ -66,8 +66,8 @@ export interface InvoiceWithRelations extends Invoice {
 export type ClientType = 'individual' | 'corporate' | 'institutional'
 export type RiskLevel = 'low' | 'medium' | 'high'
 export type ComplianceStatus = 'pending' | 'approved' | 'rejected' | 'under_review'
-export type SKRStatus = 'draft' | 'approved' | 'issued' | 'in_transit' | 'delivered' | 'closed'
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+export type SKRStatus = 'draft' | 'approved' | 'issued' | 'in_transit' | 'delivered' | 'closed'\nexport type TrackingStatus = 'in_vault' | 'in_transit' | 'at_destination' | 'delivered' | 'returned'
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'\nexport type PaymentMethod = 'cash' | 'bank_transfer' | 'credit_card' | 'debit_card' | 'check' | 'crypto' | 'other'\nexport type CreditNoteReason = 'return' | 'discount' | 'error' | 'cancellation' | 'other'\nexport type CreditNoteStatus = 'draft' | 'issued' | 'applied'\nexport type KYCDocumentStatus = 'pending' | 'approved' | 'rejected' | 'under_review'\nexport type DocumentType = 'passport' | 'national_id' | 'drivers_license' | 'utility_bill' | 'bank_statement' | 'proof_of_address' | 'business_registration' | 'articles_of_incorporation' | 'tax_certificate' | 'other'
 export type UserRole = 'admin' | 'finance' | 'operations' | 'compliance' | 'read_only'
 export type UserStatus = 'active' | 'inactive' | 'suspended'
 
