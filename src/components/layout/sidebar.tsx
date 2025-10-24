@@ -18,7 +18,8 @@ import {
   TrendingUp,
   AlertTriangle,
   Activity,
-  Eye
+  Eye,
+  Bell
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -76,10 +77,13 @@ export function Sidebar({ className }: SidebarProps) {
     },
     {
       name: 'Reports & Analytics',
-      href: '/dashboard/reports',
       icon: BarChart3,
-      current: pathname.startsWith('/dashboard/reports'),
       show: true,
+      children: [
+        { name: 'SKR Analytics', href: '/dashboard/analytics/skrs', icon: FileText, show: permissions.canViewSKRs() },
+        { name: 'Financial Analytics', href: '/dashboard/analytics/financial', icon: DollarSign, show: permissions.canManageFinance() },
+        { name: 'Compliance Analytics', href: '/dashboard/analytics/compliance', icon: Shield, show: permissions.canViewCompliance() },
+      ].filter(child => child.show),
     },
     {
       name: 'Administration',
@@ -87,6 +91,7 @@ export function Sidebar({ className }: SidebarProps) {
       show: permissions.canManageUsers(),
       children: [
         { name: 'User Management', href: '/dashboard/admin/users', icon: Users, show: permissions.canManageUsers() },
+        { name: 'Notifications', href: '/dashboard/admin/notifications', icon: Bell, show: permissions.canManageUsers() },
         { name: 'Audit Logs', href: '/dashboard/audit', icon: FileText, show: permissions.canViewAuditLogs() },
         { name: 'Activity Monitor', href: '/dashboard/monitoring/activity', icon: Activity, show: permissions.canViewAuditLogs() },
         { name: 'Security Monitor', href: '/dashboard/monitoring/security', icon: Shield, show: permissions.canManageUsers() },
