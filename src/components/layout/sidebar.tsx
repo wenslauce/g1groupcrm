@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { usePermissions } from '@/contexts/auth-context'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { 
@@ -24,6 +25,7 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
+  const permissions = usePermissions()
 
   const navigation = [
     {
@@ -31,47 +33,62 @@ export function Sidebar({ className }: SidebarProps) {
       href: '/dashboard',
       icon: BarChart3,
       current: pathname === '/dashboard',
+      show: true,
     },
     {
       name: 'SKR Management',
       icon: FileText,
+      show: permissions.canViewSKRs(),
       children: [
-        { name: 'All SKRs', href: '/dashboard/skrs', icon: FileText },
-        { name: 'Create SKR', href: '/dashboard/skrs/create', icon: Plus },
-        { name: 'Tracking', href: '/dashboard/skrs/tracking', icon: TrendingUp },
-      ],
+        { name: 'All SKRs', href: '/dashboard/skrs', icon: FileText, show: permissions.canViewSKRs() },
+        { name: 'Create SKR', href: '/dashboard/skrs/create', icon: Plus, show: permissions.canCreateSKRs() },
+        { name: 'Tracking', href: '/dashboard/skrs/tracking', icon: TrendingUp, show: permissions.canViewSKRs() },
+      ].filter(child => child.show),
     },
     {
       name: 'Client Management',
       icon: Users,
+      show: permissions.canViewClients(),
       children: [
-        { name: 'All Clients', href: '/dashboard/clients', icon: Users },
-        { name: 'Add Client', href: '/dashboard/clients/create', icon: Plus },
-        { name: 'KYC Pending', href: '/dashboard/clients/kyc-pending', icon: AlertTriangle },
-      ],
+        { name: 'All Clients', href: '/dashboard/clients', icon: Users, show: permissions.canViewClients() },
+        { name: 'Add Client', href: '/dashboard/clients/create', icon: Plus, show: permissions.canManageClients() },
+        { name: 'KYC Pending', href: '/dashboard/clients/kyc-pending', icon: AlertTriangle, show: permissions.canViewCompliance() },
+      ].filter(child => child.show),
     },
     {
       name: 'Financial Operations',
       icon: DollarSign,
+      show: permissions.canManageFinance(),
       children: [
-        { name: 'Invoices', href: '/dashboard/finance/invoices', icon: FileText },
-        { name: 'Receipts', href: '/dashboard/finance/receipts', icon: FileText },
-        { name: 'Credit Notes', href: '/dashboard/finance/credit-notes', icon: FileText },
-      ],
+        { name: 'Invoices', href: '/dashboard/finance/invoices', icon: FileText, show: permissions.canManageFinance() },
+        { name: 'Receipts', href: '/dashboard/finance/receipts', icon: FileText, show: permissions.canManageFinance() },
+        { name: 'Credit Notes', href: '/dashboard/finance/credit-notes', icon: FileText, show: permissions.canManageFinance() },
+      ].filter(child => child.show),
     },
     {
       name: 'Compliance',
       href: '/dashboard/compliance',
       icon: Shield,
       current: pathname.startsWith('/dashboard/compliance'),
+      show: permissions.canViewCompliance(),
     },
     {
       name: 'Reports & Analytics',
       href: '/dashboard/reports',
       icon: BarChart3,
       current: pathname.startsWith('/dashboard/reports'),
+      show: true,
     },
-  ]
+    {
+      name: 'Administration',
+      icon: Settings,
+      show: permissions.canManageUsers(),
+      children: [
+        { name: 'User Management', href: '/dashboard/admin/users', icon: Users, show: permissions.canManageUsers() },
+        { name: 'Audit Logs', href: '/dashboard/admin/audit', icon: FileText, show: permissions.canViewAuditLogs() },
+      ].filter(child => child.show),
+    },
+  ].filter(item => item.show)
 
   return (
     <div className={cn('pb-12 w-64', className)}>
@@ -96,7 +113,7 @@ export function Sidebar({ className }: SidebarProps) {
         <div className="px-3 py-2">
           <div className="space-y-1">
             {navigation.map((item) => {
-              if (item.children) {
+              if (item.children && item.children.length > 0) {
                 return (
                   <div key={item.name} className="space-y-1">
                     <div className="flex items-center px-2 py-2 text-sm font-medium text-muted-foreground">

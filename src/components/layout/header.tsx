@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useAuth, usePermissions } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -13,20 +14,33 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Bell
+  Bell,
+  User
 } from 'lucide-react'
 
 export function Header() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, signOut } = useAuth()
+  const permissions = usePermissions()
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
-    { name: 'SKRs', href: '/dashboard/skrs', icon: FileText },
-    { name: 'Clients', href: '/dashboard/clients', icon: Users },
-    { name: 'Finance', href: '/dashboard/finance', icon: DollarSign },
-    { name: 'Compliance', href: '/dashboard/compliance', icon: Shield },
-    { name: 'Reports', href: '/dashboard/reports', icon: BarChart3 },
-  ]
+    { name: 'Dashboard', href: '/dashboard', icon: BarChart3, show: true },
+    { name: 'SKRs', href: '/dashboard/skrs', icon: FileText, show: permissions.canViewSKRs() },
+    { name: 'Clients', href: '/dashboard/clients', icon: Users, show: permissions.canViewClients() },
+    { name: 'Finance', href: '/dashboard/finance', icon: DollarSign, show: permissions.canManageFinance() },
+    { name: 'Compliance', href: '/dashboard/compliance', icon: Shield, show: permissions.canViewCompliance() },
+    { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, show: true },
+  ].filter(item => item.show)
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      router.push('/auth/login')
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -65,6 +79,17 @@ export function Header() {
           </div>
           
           <nav className="flex items-center space-x-2">
+            {/* User info */}
+            <div className="hidden md:flex items-center space-x-2 text-sm">
+              <User className="h-4 w-4" />
+              <span className="font-medium">{user?.profile?.name || user?.email}</span>
+              {user?.profile?.role && (
+                <Badge variant="secondary" className="text-xs">
+                  {user.profile.role}
+                </Badge>
+              )}
+            </div>
+            
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-4 w-4" />
               <Badge 
@@ -75,11 +100,13 @@ export function Header() {
               </Badge>
             </Button>
             
-            <Button variant="ghost" size="icon">
-              <Settings className="h-4 w-4" />
-            </Button>
+            <Link href="/dashboard/settings">
+              <Button variant="ghost" size="icon">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </Link>
             
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" onClick={handleSignOut}>
               <LogOut className="h-4 w-4" />
             </Button>
           </nav>
