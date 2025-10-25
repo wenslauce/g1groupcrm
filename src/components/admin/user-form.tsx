@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Eye, EyeOff, Loader2, Save, X } from 'lucide-react'
 import { UserProfile } from '@/types'
-import { roleUtils } from '@/lib/auth'
+import { roleUtils } from '@/lib/auth-client'
 
 interface UserFormProps {
   user?: UserProfile | null

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authServer } from '@/lib/auth'
+import { authServer } from '@/lib/auth-server'
 import { notificationService } from '@/lib/notification-service'
 import { z } from 'zod'
 

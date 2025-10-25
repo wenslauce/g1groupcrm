@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Save, User } from 'lucide-react'
-import { roleUtils } from '@/lib/auth'
+import { roleUtils } from '@/lib/auth-client'
 
 export function ProfileForm() {
   const { user, updateProfile } = useAuth()

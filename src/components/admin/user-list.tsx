@@ -19,7 +19,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { UserProfile } from '@/types'
-import { roleUtils } from '@/lib/auth'
+import { roleUtils } from '@/lib/auth-client'
 import { formatDateTime } from '@/lib/utils'
 
 interface UserListProps {

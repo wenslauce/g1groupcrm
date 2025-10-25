@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authServer } from '@/lib/auth'
+import { authServer } from '@/lib/auth-server'
 import { notificationProcessor } from '@/lib/notification-processor'
 
 export async function POST(request: NextRequest) {

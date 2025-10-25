@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Building2, Eye, EyeOff, Loader2 } from 'lucide-react'
-import { roleUtils } from '@/lib/auth'
+import { roleUtils } from '@/lib/auth-client'
 
 export function SignUpForm() {
   const [formData, setFormData] = useState({

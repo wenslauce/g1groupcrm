@@ -6,6 +6,7 @@ import { useAuth, usePermissions } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { NotificationCenter } from '@/components/notifications/notification-center'
+import { GlobalSearchBar } from '@/components/search/global-search-bar'
 import { 
   Building2, 
   FileText, 
@@ -15,7 +16,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Bell,
   User
 } from 'lucide-react'
 
@@ -75,8 +75,8 @@ export function Header() {
         </div>
         
         <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <div className="w-full flex-1 md:w-auto md:flex-none">
-            {/* Search will go here */}
+          <div className="w-full flex-1 md:w-auto md:flex-none md:max-w-md">
+            <GlobalSearchBar className="w-full" />
           </div>
           
           <nav className="flex items-center space-x-2">
