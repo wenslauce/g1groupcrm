@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { usePermissions } from '@/contexts/auth-context'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { 
   Building2, 
   FileText, 
@@ -99,26 +100,28 @@ export function Sidebar({ className }: SidebarProps) {
   ].filter(item => item.show)
 
   return (
-    <div className={cn('pb-12 w-64', className)}>
-      <div className="space-y-4 py-4">
-        <div className="px-3 py-2">
-          <div className="flex items-center mb-4">
-            <Building2 className="h-8 w-8 text-g1-primary mr-3" />
-            <div>
-              <h2 className="text-lg font-semibold text-g1-primary">G1 Holdings</h2>
-              <p className="text-xs text-muted-foreground">Command Center</p>
-            </div>
-          </div>
-          
-          <div className="space-y-1">
-            <Button variant="outline" className="w-full justify-start" size="sm">
-              <Search className="mr-2 h-4 w-4" />
-              Search...
-            </Button>
+    <div className={cn('w-64 h-full flex flex-col', className)}>
+      {/* Fixed Header */}
+      <div className="px-3 py-4 border-b">
+        <div className="flex items-center mb-4">
+          <Building2 className="h-8 w-8 text-g1-primary mr-3" />
+          <div>
+            <h2 className="text-lg font-semibold text-g1-primary">G1 Holdings</h2>
+            <p className="text-xs text-muted-foreground">Command Center</p>
           </div>
         </div>
         
-        <div className="px-3 py-2">
+        <div className="space-y-1">
+          <Button variant="outline" className="w-full justify-start" size="sm">
+            <Search className="mr-2 h-4 w-4" />
+            Search...
+          </Button>
+        </div>
+      </div>
+
+      {/* Scrollable Content */}
+      <ScrollArea className="flex-1">
+        <div className="px-3 py-4">
           <div className="space-y-1">
             {navigation.map((item) => {
               if (item.children && item.children.length > 0) {
@@ -181,20 +184,21 @@ export function Sidebar({ className }: SidebarProps) {
             })}
           </div>
         </div>
-        
-        <div className="px-3 py-2">
-          <div className="space-y-1">
-            <Link href="/dashboard/settings">
-              <Button
-                variant={pathname.startsWith('/dashboard/settings') ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                size="sm"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </Button>
-            </Link>
-          </div>
+      </ScrollArea>
+
+      {/* Fixed Footer */}
+      <div className="px-3 py-4 border-t">
+        <div className="space-y-1">
+          <Link href="/dashboard/settings">
+            <Button
+              variant={pathname.startsWith('/dashboard/settings') ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              size="sm"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </Button>
+          </Link>
         </div>
       </div>
     </div>
