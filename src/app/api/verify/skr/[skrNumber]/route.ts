@@ -70,14 +70,14 @@ export async function GET(
       hash_valid: hashValid,
       verification_time: new Date().toISOString(),
       client: {
-        name: skr.client?.name,
-        country: skr.client?.country
+        name: Array.isArray(skr.client) ? (skr.client as any[])[0]?.name : (skr.client as any)?.name,
+        country: Array.isArray(skr.client) ? (skr.client as any[])[0]?.country : (skr.client as any)?.country
       },
       asset: {
-        name: skr.asset?.asset_name,
-        type: skr.asset?.asset_type,
-        declared_value: skr.asset?.declared_value,
-        currency: skr.asset?.currency
+        name: Array.isArray(skr.asset) ? (skr.asset as any[])[0]?.asset_name : (skr.asset as any)?.asset_name,
+        type: Array.isArray(skr.asset) ? (skr.asset as any[])[0]?.asset_type : (skr.asset as any)?.asset_type,
+        declared_value: Array.isArray(skr.asset) ? (skr.asset as any[])[0]?.declared_value : (skr.asset as any)?.declared_value,
+        currency: Array.isArray(skr.asset) ? (skr.asset as any[])[0]?.currency : (skr.asset as any)?.currency
       },
       // Include hash for verification but don't expose sensitive data
       hash_provided: !!providedHash,

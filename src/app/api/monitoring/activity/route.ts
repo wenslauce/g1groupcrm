@@ -114,7 +114,8 @@ export async function GET(request: NextRequest) {
       
       // Group by user
       const userCounts = activities?.reduce((acc, activity) => {
-        const userName = activity.user_profiles?.full_name || activity.user_id
+        const userProfile = Array.isArray(activity.user_profiles) ? activity.user_profiles[0] : activity.user_profiles
+        const userName = userProfile?.full_name || activity.user_id
         acc[userName] = (acc[userName] || 0) + 1
         return acc
       }, {} as Record<string, number>) || {}
@@ -189,11 +190,11 @@ function detectSuspiciousActivity(activities: any[]): any[] {
   }, {} as Record<string, any[]>)
   
   // Check for suspicious patterns
-  Object.entries(userActivities).forEach(([key, userActivities]) => {
+  Object.entries(userActivities).forEach(([key, activities]) => {
     const [userId, ipAddress] = key.split('-')
     
     // Pattern 1: Too many failed login attempts
-    const failedLogins = userActivities.filter(a => a.action === 'login_failed')
+    const failedLogins = (activities as any[]).filter(a => a.action === 'login_failed')
     if (failedLogins.length >= 5) {
       suspicious.push({
         type: 'multiple_failed_logins',
@@ -207,7 +208,7 @@ function detectSuspiciousActivity(activities: any[]): any[] {
     }
     
     // Pattern 2: Rapid successive actions (potential bot activity)
-    const sortedActivities = userActivities.sort((a, b) => 
+    const sortedActivities = (activities as any[]).sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     )
     
@@ -233,9 +234,9 @@ function detectSuspiciousActivity(activities: any[]): any[] {
     }
     
     // Pattern 3: Unusual access patterns (accessing many different resource types quickly)
-    const resourceTypes = new Set(userActivities.map(a => a.resource_type))
-    const timeSpan = Math.max(...userActivities.map(a => new Date(a.created_at).getTime())) - 
-                    Math.min(...userActivities.map(a => new Date(a.created_at).getTime()))
+    const resourceTypes = new Set((activities as any[]).map(a => a.resource_type))
+    const timeSpan = Math.max(...(activities as any[]).map(a => new Date(a.created_at).getTime())) - 
+                    Math.min(...(activities as any[]).map(a => new Date(a.created_at).getTime()))
     
     if (resourceTypes.size >= 5 && timeSpan < 5 * 60 * 1000) { // 5+ resource types in 5 minutes
       suspicious.push({
@@ -245,12 +246,12 @@ function detectSuspiciousActivity(activities: any[]): any[] {
         resource_types: Array.from(resourceTypes),
         severity: 'medium',
         description: `Accessed ${resourceTypes.size} different resource types in ${Math.round(timeSpan / 60000)} minutes`,
-        activities: userActivities.slice(0, 5)
+        activities: (activities as any[]).slice(0, 5)
       })
     }
     
     // Pattern 4: Off-hours activity (outside 9 AM - 6 PM)
-    const offHoursActivities = userActivities.filter(a => {
+    const offHoursActivities = (activities as any[]).filter(a => {
       const hour = new Date(a.created_at).getHours()
       return hour < 9 || hour > 18
     })

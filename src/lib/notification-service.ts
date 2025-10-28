@@ -567,5 +567,9 @@ export const notificationService = {
   
   async getUserPreferences(userId: string, notificationType: string) {
     return this.instance.getUserPreferences(userId, notificationType)
+  },
+  
+  async updateUserPreferences(userId: string, notificationType: string, preferences: Partial<NotificationPreferences>) {
+    return this.instance.updateUserPreferences(userId, notificationType, preferences)
   }
 }

@@ -206,8 +206,8 @@ function analyzeSecurityEvents(events: any[]) {
   analysis.top_users = Object.entries(userCounts)
     .map(([user, data]) => ({
       user,
-      count: data.count,
-      risk_score: calculateUserRiskScore(data.events)
+      count: (data as { count: number; events: string[] }).count,
+      risk_score: calculateUserRiskScore((data as { count: number; events: string[] }).events)
     }))
     .sort((a, b) => b.risk_score - a.risk_score)
     .slice(0, 10)
@@ -226,8 +226,8 @@ function analyzeSecurityEvents(events: any[]) {
   analysis.top_ips = Object.entries(ipCounts)
     .map(([ip, data]) => ({
       ip,
-      count: data.count,
-      events: [...new Set(data.events)]
+      count: (data as { count: number; events: string[] }).count,
+      events: Array.from(new Set((data as { count: number; events: string[] }).events))
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 10)
@@ -312,9 +312,9 @@ function groupFailedLoginsByIP(failedLogins: any[]) {
   // Convert sets to arrays and sort by count
   return Object.values(grouped)
     .map(group => ({
-      ...group,
-      user_agents: Array.from(group.user_agents),
-      attempts: group.attempts.slice(0, 10) // Limit to last 10 attempts
+      ...(group as any),
+      user_agents: Array.from((group as any).user_agents),
+      attempts: (group as any).attempts.slice(0, 10) // Limit to last 10 attempts
     }))
     .sort((a: any, b: any) => b.count - a.count)
 }

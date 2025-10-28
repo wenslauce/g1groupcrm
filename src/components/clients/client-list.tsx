@@ -113,7 +113,9 @@ export function ClientList({ onEditClient }: ClientListProps) {
   }
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
+    // Convert "all" back to empty string for filtering logic
+    const filterValue = value === 'all' ? '' : value
+    setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPagination(prev => ({ ...prev, page: 1 })) // Reset to first page
   }
 
@@ -191,14 +193,14 @@ export function ClientList({ onEditClient }: ClientListProps) {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Select
-              value={filters.type}
+              value={filters.type || 'all'}
               onValueChange={(value) => handleFilterChange('type', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="all">All Types</SelectItem>
                 {clientUtils.getAllTypes().map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     {type.label}
@@ -208,14 +210,14 @@ export function ClientList({ onEditClient }: ClientListProps) {
             </Select>
 
             <Select
-              value={filters.risk_level}
+              value={filters.risk_level || 'all'}
               onValueChange={(value) => handleFilterChange('risk_level', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Filter by risk level" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Risk Levels</SelectItem>
+                <SelectItem value="all">All Risk Levels</SelectItem>
                 {clientUtils.getAllRiskLevels().map((level) => (
                   <SelectItem key={level.value} value={level.value}>
                     {level.label}
@@ -225,14 +227,14 @@ export function ClientList({ onEditClient }: ClientListProps) {
             </Select>
 
             <Select
-              value={filters.compliance_status}
+              value={filters.compliance_status || 'all'}
               onValueChange={(value) => handleFilterChange('compliance_status', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Filter by compliance" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 {clientUtils.getAllComplianceStatuses().map((status) => (
                   <SelectItem key={status.value} value={status.value}>
                     {status.label}
@@ -242,14 +244,14 @@ export function ClientList({ onEditClient }: ClientListProps) {
             </Select>
 
             <Select
-              value={filters.country}
+              value={filters.country || 'all'}
               onValueChange={(value) => handleFilterChange('country', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Filter by country" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Countries</SelectItem>
+                <SelectItem value="all">All Countries</SelectItem>
                 {clientUtils.getCountryList().slice(0, 20).map((country) => (
                   <SelectItem key={country} value={country}>
                     {country}

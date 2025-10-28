@@ -94,9 +94,9 @@ export function AuditDashboard({ className }: AuditDashboardProps) {
       })
 
       if (searchTerm) params.append('search', searchTerm)
-      if (selectedAction) params.append('action', selectedAction)
-      if (selectedResourceType) params.append('resource_type', selectedResourceType)
-      if (selectedUser) params.append('user_id', selectedUser)
+      if (selectedAction && selectedAction !== 'all') params.append('action', selectedAction)
+      if (selectedResourceType && selectedResourceType !== 'all') params.append('resource_type', selectedResourceType)
+      if (selectedUser && selectedUser !== 'all') params.append('user_id', selectedUser)
       if (startDate) params.append('start_date', new Date(startDate).toISOString())
       if (endDate) params.append('end_date', new Date(endDate).toISOString())
 
@@ -138,9 +138,9 @@ export function AuditDashboard({ className }: AuditDashboardProps) {
         report_type: 'custom' as const,
         start_date: startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         end_date: endDate ? new Date(endDate).toISOString() : new Date().toISOString(),
-        actions: selectedAction ? [selectedAction] : undefined,
-        resource_types: selectedResourceType ? [selectedResourceType] : undefined,
-        user_ids: selectedUser ? [selectedUser] : undefined,
+        actions: selectedAction && selectedAction !== 'all' ? [selectedAction] : undefined,
+        resource_types: selectedResourceType && selectedResourceType !== 'all' ? [selectedResourceType] : undefined,
+        user_ids: selectedUser && selectedUser !== 'all' ? [selectedUser] : undefined,
         include_details: true,
         format
       }
@@ -348,7 +348,7 @@ export function AuditDashboard({ className }: AuditDashboardProps) {
                 <SelectValue placeholder="Action" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Actions</SelectItem>
+                <SelectItem value="all">All Actions</SelectItem>
                 <SelectItem value="login_success">Login Success</SelectItem>
                 <SelectItem value="login_failed">Login Failed</SelectItem>
                 <SelectItem value="client_created">Client Created</SelectItem>
@@ -363,7 +363,7 @@ export function AuditDashboard({ className }: AuditDashboardProps) {
                 <SelectValue placeholder="Resource Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="auth">Authentication</SelectItem>
                 <SelectItem value="client">Client</SelectItem>
                 <SelectItem value="skr">SKR</SelectItem>

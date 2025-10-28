@@ -169,7 +169,29 @@ export function MainDashboard({ className }: MainDashboardProps) {
 
   if (!data) return null
 
-  const { summary, trends, distributions, recent_activities } = data
+  const { summary: apiSummary, growth: trends, distributions, recent_activities } = data
+  
+  // Map API response to expected format
+  const summary = {
+    total_clients: apiSummary?.total_clients || 0,
+    new_clients: apiSummary?.new_clients || 0,
+    approved_clients: apiSummary?.compliant_clients || 0,
+    total_skrs: apiSummary?.total_skrs || 0,
+    active_skrs: (apiSummary?.issued_skrs || 0) + (apiSummary?.in_transit_skrs || 0),
+    issued_skrs: apiSummary?.issued_skrs || 0,
+    total_asset_value: 0, // Not available in current API
+    total_invoice_amount: apiSummary?.total_revenue || 0,
+    total_paid_amount: apiSummary?.collected_revenue || 0,
+    outstanding_amount: (apiSummary?.total_revenue || 0) - (apiSummary?.collected_revenue || 0),
+    compliance_rate: apiSummary?.compliance_rate || 0
+  }
+  
+  // Map trends to expected format
+  const mappedTrends = {
+    client_growth: trends?.client_growth || 0,
+    skr_growth: trends?.skr_growth || 0,
+    asset_value_growth: trends?.revenue_growth || 0 // Map revenue growth to asset value growth
+  }
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -224,9 +246,9 @@ export function MainDashboard({ className }: MainDashboardProps) {
           <CardContent>
             <div className="text-2xl font-bold">{summary.total_skrs.toLocaleString()}</div>
             <div className="flex items-center text-xs text-muted-foreground">
-              {getTrendIcon(trends.skr_growth)}
-              <span className={`ml-1 ${getTrendColor(trends.skr_growth)}`}>
-                {trends.skr_growth > 0 ? '+' : ''}{trends.skr_growth.toFixed(1)}%
+              {getTrendIcon(mappedTrends.skr_growth)}
+              <span className={`ml-1 ${getTrendColor(mappedTrends.skr_growth)}`}>
+                {mappedTrends.skr_growth > 0 ? '+' : ''}{mappedTrends.skr_growth.toFixed(1)}%
               </span>
               <span className="ml-1">from last period</span>
             </div>
@@ -254,9 +276,9 @@ export function MainDashboard({ className }: MainDashboardProps) {
           <CardContent>
             <div className="text-2xl font-bold">{summary.total_clients}</div>
             <div className="flex items-center text-xs text-muted-foreground">
-              {getTrendIcon(trends.client_growth)}
-              <span className={`ml-1 ${getTrendColor(trends.client_growth)}`}>
-                {trends.client_growth > 0 ? '+' : ''}{trends.client_growth.toFixed(1)}%
+              {getTrendIcon(mappedTrends.client_growth)}
+              <span className={`ml-1 ${getTrendColor(mappedTrends.client_growth)}`}>
+                {mappedTrends.client_growth > 0 ? '+' : ''}{mappedTrends.client_growth.toFixed(1)}%
               </span>
               <span className="ml-1">growth</span>
             </div>
@@ -273,9 +295,9 @@ export function MainDashboard({ className }: MainDashboardProps) {
               {formatCurrency(summary.total_asset_value, 'USD')}
             </div>
             <div className="flex items-center text-xs text-muted-foreground">
-              {getTrendIcon(trends.asset_value_growth)}
-              <span className={`ml-1 ${getTrendColor(trends.asset_value_growth)}`}>
-                {trends.asset_value_growth > 0 ? '+' : ''}{trends.asset_value_growth.toFixed(1)}%
+              {getTrendIcon(mappedTrends.asset_value_growth)}
+              <span className={`ml-1 ${getTrendColor(mappedTrends.asset_value_growth)}`}>
+                {mappedTrends.asset_value_growth > 0 ? '+' : ''}{mappedTrends.asset_value_growth.toFixed(1)}%
               </span>
               <span className="ml-1">from last period</span>
             </div>

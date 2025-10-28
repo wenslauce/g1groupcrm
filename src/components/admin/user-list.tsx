@@ -107,7 +107,9 @@ export function UserList({ onCreateUser, onEditUser }: UserListProps) {
   }
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
+    // Convert "all" back to empty string for filtering logic
+    const filterValue = value === 'all' ? '' : value
+    setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPagination(prev => ({ ...prev, page: 1 })) // Reset to first page
   }
 
@@ -158,14 +160,14 @@ export function UserList({ onCreateUser, onEditUser }: UserListProps) {
           </div>
           
           <Select
-            value={filters.role}
+            value={filters.role || 'all'}
             onValueChange={(value) => handleFilterChange('role', value)}
           >
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filter by role" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Roles</SelectItem>
+              <SelectItem value="all">All Roles</SelectItem>
               {roleUtils.getAllRoles().map((role) => (
                 <SelectItem key={role.value} value={role.value}>
                   {role.label}
@@ -175,14 +177,14 @@ export function UserList({ onCreateUser, onEditUser }: UserListProps) {
           </Select>
 
           <Select
-            value={filters.status}
+            value={filters.status || 'all'}
             onValueChange={(value) => handleFilterChange('status', value)}
           >
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Status</SelectItem>
+              <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
               <SelectItem value="suspended">Suspended</SelectItem>

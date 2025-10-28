@@ -175,8 +175,8 @@ export function NotificationManagement({ className }: NotificationManagementProp
       notification.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
       notification.type.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesStatus = !statusFilter || notification.status === statusFilter
-    const matchesChannel = !channelFilter || notification.channel === channelFilter
+    const matchesStatus = !statusFilter || statusFilter === 'all' || notification.status === statusFilter
+    const matchesChannel = !channelFilter || channelFilter === 'all' || notification.channel === channelFilter
 
     return matchesSearch && matchesStatus && matchesChannel
   })
@@ -432,7 +432,7 @@ export function NotificationManagement({ className }: NotificationManagementProp
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="sent">Sent</SelectItem>
                 <SelectItem value="delivered">Delivered</SelectItem>
@@ -446,7 +446,7 @@ export function NotificationManagement({ className }: NotificationManagementProp
                 <SelectValue placeholder="Channel" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Channels</SelectItem>
+                <SelectItem value="all">All Channels</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
                 <SelectItem value="sms">SMS</SelectItem>
                 <SelectItem value="in_app">In-App</SelectItem>

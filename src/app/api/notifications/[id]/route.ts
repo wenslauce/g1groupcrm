@@ -10,6 +10,10 @@ export async function PATCH(
     // Get current user
     const user = await authServer.getCurrentUser()
     
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
     const body = await request.json()
     const { action } = body
     
@@ -40,6 +44,10 @@ export async function DELETE(
   try {
     // Get current user
     const user = await authServer.getCurrentUser()
+    
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     
     const result = await notificationService.deleteNotification(params.id, user.id)
     

@@ -16,6 +16,10 @@ export async function GET(request: NextRequest) {
     // Get current user
     const user = await authServer.getCurrentUser()
     
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
     const { searchParams } = new URL(request.url)
     const notificationType = searchParams.get('type')
     
@@ -42,6 +46,10 @@ export async function PUT(request: NextRequest) {
   try {
     // Get current user
     const user = await authServer.getCurrentUser()
+    
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     
     const body = await request.json()
     const validatedData = preferencesSchema.parse(body)

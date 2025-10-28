@@ -379,14 +379,14 @@ export function AdvancedFilters({
           <div className="space-y-2">
             <Label className="text-sm font-medium">Priority</Label>
             <Select
-              value={filters.priority || ''}
-              onValueChange={(value) => updateFilters({ priority: value || undefined })}
+              value={filters.priority || 'all'}
+              onValueChange={(value) => updateFilters({ priority: value === 'all' ? undefined : value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Priorities</SelectItem>
+                <SelectItem value="all">All Priorities</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="high">High</SelectItem>
@@ -400,14 +400,14 @@ export function AdvancedFilters({
             <div className="space-y-2">
               <Label className="text-sm font-medium">Assigned To</Label>
               <Select
-                value={filters.assignedTo || ''}
-                onValueChange={(value) => updateFilters({ assignedTo: value || undefined })}
+                value={filters.assignedTo || 'all'}
+                onValueChange={(value) => updateFilters({ assignedTo: value === 'all' ? undefined : value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select user" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Users</SelectItem>
+                  <SelectItem value="all">All Users</SelectItem>
                   {availableUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name}
