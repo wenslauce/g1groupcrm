@@ -1,19 +1,8 @@
-import { ProtectedRoute } from '@/components/auth/protected-route'
-import { ClientForm } from '@/components/clients/client-form'
-
 export default function CreateClientPage() {
   return (
-    <ProtectedRoute requiredRoles={['admin', 'finance']}>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Add New Client</h1>
-          <p className="text-muted-foreground">
-            Create a new client profile with contact and compliance details
-          </p>
-        </div>
-
-        <ClientForm />
-      </div>
-    </ProtectedRoute>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Create Client</h1>
+      <p className="text-muted-foreground">Client creation page coming soon...</p>
+    </div>
   )
 }

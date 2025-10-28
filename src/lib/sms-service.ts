@@ -10,7 +10,14 @@ export interface SMSTemplate {
 }
 
 export class SMSService {
-  private supabase = createClient()
+  private _supabase: ReturnType<typeof createClient> | null = null
+
+  private get supabase() {
+    if (!this._supabase) {
+      this._supabase = createClient()
+    }
+    return this._supabase
+  }
   private maxMessageLength = 160 // Standard SMS length
 
   /**
@@ -429,5 +436,43 @@ export class SMSService {
   }
 }
 
-// Export singleton instance
-export const smsService = new SMSService()
+// Export singleton instance (lazy initialization)
+let _smsService: SMSService | null = null
+
+export const smsService = {
+  get instance() {
+    if (!_smsService) {
+      _smsService = new SMSService()
+    }
+    return _smsService
+  },
+  
+  // Proxy methods for convenience
+  async sendSMS(smsData: SMSData) {
+    return this.instance.sendSMS(smsData)
+  },
+  
+  async processSMSQueue(limit?: number) {
+    return this.instance.processSMSQueue(limit)
+  },
+  
+  async getTemplate(type: string, channel: 'sms') {
+    return this.instance.getTemplate(type, channel)
+  },
+  
+  async createDefaultTemplates() {
+    return this.instance.createDefaultTemplates()
+  },
+  
+  async getDeliveryStats(startDate?: Date, endDate?: Date) {
+    return this.instance.getDeliveryStats(startDate, endDate)
+  },
+  
+  async hasOptedOut(phoneNumber: string) {
+    return this.instance.hasOptedOut(phoneNumber)
+  },
+  
+  async addToOptOut(phoneNumber: string) {
+    return this.instance.addToOptOut(phoneNumber)
+  }
+}

@@ -20,8 +20,15 @@ export interface EmailData {
 }
 
 export class EmailService {
-  private supabase = createClient()
+  private _supabase: ReturnType<typeof createClient> | null = null
   private defaultFrom = process.env.DEFAULT_FROM_EMAIL || 'noreply@g1holdings.com'
+
+  private get supabase() {
+    if (!this._supabase) {
+      this._supabase = createClient()
+    }
+    return this._supabase
+  }
 
   /**
    * Send email immediately (for testing/development)
@@ -358,5 +365,31 @@ export class EmailService {
   }
 }
 
-// Export singleton instance
-export const emailService = new EmailService()
+// Export singleton instance (lazy initialization)
+let _emailService: EmailService | null = null
+
+export const emailService = {
+  get instance() {
+    if (!_emailService) {
+      _emailService = new EmailService()
+    }
+    return _emailService
+  },
+  
+  // Proxy methods for convenience
+  async sendEmail(emailData: EmailData) {
+    return this.instance.sendEmail(emailData)
+  },
+  
+  async processEmailQueue(limit?: number) {
+    return this.instance.processEmailQueue(limit)
+  },
+  
+  async getTemplate(type: string, channel: 'email') {
+    return this.instance.getTemplate(type, channel)
+  },
+  
+  async createDefaultTemplates() {
+    return this.instance.createDefaultTemplates()
+  }
+}

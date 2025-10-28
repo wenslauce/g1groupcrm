@@ -5,7 +5,14 @@ import { FilterValues, FilterConfig } from '@/components/search/advanced-filters
  * Server-side filter preset service
  */
 export class FilterPresetServiceServer {
-  private supabase = createClient()
+  private _supabase: ReturnType<typeof createClient> | null = null
+
+  private get supabase() {
+    if (!this._supabase) {
+      this._supabase = createClient()
+    }
+    return this._supabase
+  }
 
   /**
    * Create a new filter preset

@@ -167,7 +167,7 @@ export function GlobalSearchBar({
 
     if (onResultClick) {
       onResultClick(result)
-    } else {
+    } else if (result.url) {
       router.push(result.url)
     }
   }

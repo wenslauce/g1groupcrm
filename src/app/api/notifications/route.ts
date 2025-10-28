@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { authServer } from '@/lib/auth-server'
 import { notificationService } from '@/lib/notification-service'
 import { z } from 'zod'
@@ -27,12 +26,16 @@ export async function GET(request: NextRequest) {
     // Get current user
     const user = await authServer.getCurrentUser()
     
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
     const { searchParams } = new URL(request.url)
     
     // Parse and validate query parameters
     const query = notificationQuerySchema.parse({
-      channel: searchParams.get('channel'),
-      status: searchParams.get('status'),
+      channel: searchParams.get('channel') || undefined,
+      status: searchParams.get('status') || undefined,
       unread_only: searchParams.get('unread_only'),
       limit: searchParams.get('limit'),
       offset: searchParams.get('offset')
@@ -76,6 +79,10 @@ export async function POST(request: NextRequest) {
     // Get current user
     const user = await authServer.getCurrentUser()
     
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
     const body = await request.json()
     const validatedData = sendNotificationSchema.parse(body)
     
@@ -83,6 +90,16 @@ export async function POST(request: NextRequest) {
     const targetUserId = validatedData.user_id || user.id
     
     // Check if user has permission to send notifications to other users
+    if (targetUserId !== user.id) {
+      // For now, only allow sending to self - can be expanded later
+      return NextResponse.json(
+        { error: 'Can only send notifications to yourself' },
+        { status: 403 }
+      )
+    }
+    
+    // Remove the getUserRole check for now since it doesn't exist
+    /*
     if (targetUserId !== user.id) {
       const userRole = await authServer.getUserRole(user.id)
       if (!['admin', 'operations'].includes(userRole)) {
@@ -92,6 +109,7 @@ export async function POST(request: NextRequest) {
         )
       }
     }
+    */
     
     // Send notification
     const result = await notificationService.sendNotification({

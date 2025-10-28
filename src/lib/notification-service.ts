@@ -20,7 +20,14 @@ export interface NotificationPreferences {
 }
 
 export class NotificationService {
-  private supabase = createClient()
+  private _supabase: ReturnType<typeof createClient> | null = null
+
+  private get supabase() {
+    if (!this._supabase) {
+      this._supabase = createClient()
+    }
+    return this._supabase
+  }
 
   /**
    * Send notification through all enabled channels
@@ -134,7 +141,7 @@ export class NotificationService {
   ): Promise<void> {
     try {
       // Get email template
-      const template = await emailService.getTemplate(data.type, 'email')
+      const template = await emailService.instance.getTemplate(data.type, 'email')
       
       let subject = data.subject || `Notification from G1 Holdings`
       let htmlBody = data.message
@@ -148,13 +155,13 @@ export class NotificationService {
           ...data.data
         }
 
-        subject = emailService.renderTemplate(template.subject, variables)
-        htmlBody = emailService.renderTemplate(template.html, variables)
-        textBody = template.text ? emailService.renderTemplate(template.text, variables) : htmlBody
+        subject = emailService.instance.renderTemplate(template.subject, variables)
+        htmlBody = emailService.instance.renderTemplate(template.html, variables)
+        textBody = template.text ? emailService.instance.renderTemplate(template.text, variables) : htmlBody
       }
 
       // Queue email for delivery
-      await emailService.queueEmail(
+      await emailService.instance.queueEmail(
         notificationId,
         email,
         subject,
@@ -183,7 +190,7 @@ export class NotificationService {
       }
 
       // Check if user has opted out
-      const hasOptedOut = await smsService.hasOptedOut(phone)
+      const hasOptedOut = await smsService.instance.hasOptedOut(phone)
       if (hasOptedOut) {
         console.log(`User ${userName} has opted out of SMS notifications`)
         
@@ -201,7 +208,7 @@ export class NotificationService {
       }
 
       // Get SMS template
-      const template = await smsService.getTemplate(data.type, 'sms')
+      const template = await smsService.instance.getTemplate(data.type, 'sms')
       
       let message = data.message
 
@@ -213,14 +220,14 @@ export class NotificationService {
           ...data.data
         }
 
-        message = smsService.renderTemplate(template.message, variables)
+        message = smsService.instance.renderTemplate(template.message, variables)
       }
 
       // Format phone number
-      const formattedPhone = smsService.formatPhoneNumber(phone)
+      const formattedPhone = smsService.instance.formatPhoneNumber(phone)
 
       // Queue SMS for delivery
-      await smsService.queueSMS(
+      await smsService.instance.queueSMS(
         notificationId,
         formattedPhone,
         message,
@@ -526,5 +533,39 @@ export class NotificationService {
   }
 }
 
-// Export singleton instance
-export const notificationService = new NotificationService()
+// Export singleton instance (lazy initialization)
+let _notificationService: NotificationService | null = null
+
+export const notificationService = {
+  get instance() {
+    if (!_notificationService) {
+      _notificationService = new NotificationService()
+    }
+    return _notificationService
+  },
+  
+  // Proxy methods for convenience
+  async sendNotification(data: NotificationData) {
+    return this.instance.sendNotification(data)
+  },
+  
+  async getUserNotifications(userId: string, options?: any) {
+    return this.instance.getUserNotifications(userId, options || {})
+  },
+  
+  async markAsRead(notificationId: string, userId: string) {
+    return this.instance.markAsRead(notificationId, userId)
+  },
+  
+  async markAllAsRead(userId: string) {
+    return this.instance.markAllAsRead(userId)
+  },
+  
+  async deleteNotification(notificationId: string, userId: string) {
+    return this.instance.deleteNotification(notificationId, userId)
+  },
+  
+  async getUserPreferences(userId: string, notificationType: string) {
+    return this.instance.getUserPreferences(userId, notificationType)
+  }
+}

@@ -161,7 +161,9 @@ export function SearchResults({
       result.type
     )
     
-    router.push(result.url)
+    if (result.url) {
+      router.push(result.url)
+    }
   }
 
   // Initial search on mount

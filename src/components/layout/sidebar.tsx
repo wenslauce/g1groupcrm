@@ -18,7 +18,6 @@ import {
   TrendingUp,
   AlertTriangle,
   Activity,
-  Eye,
   Bell
 } from 'lucide-react'
 
@@ -150,17 +149,34 @@ export function Sidebar({ className }: SidebarProps) {
                 )
               }
 
+              // Only render as Link if item has href
+              if (item.href) {
+                return (
+                  <Link key={item.name} href={item.href}>
+                    <Button
+                      variant={item.current ? "secondary" : "ghost"}
+                      className="w-full justify-start"
+                      size="sm"
+                    >
+                      <item.icon className="mr-2 h-4 w-4" />
+                      {item.name}
+                    </Button>
+                  </Link>
+                )
+              }
+
+              // For items without href (shouldn't happen after filtering), render as disabled button
               return (
-                <Link key={item.name} href={item.href!}>
-                  <Button
-                    variant={item.current ? "secondary" : "ghost"}
-                    className="w-full justify-start"
-                    size="sm"
-                  >
-                    <item.icon className="mr-2 h-4 w-4" />
-                    {item.name}
-                  </Button>
-                </Link>
+                <Button
+                  key={item.name}
+                  variant="ghost"
+                  className="w-full justify-start"
+                  size="sm"
+                  disabled
+                >
+                  <item.icon className="mr-2 h-4 w-4" />
+                  {item.name}
+                </Button>
               )
             })}
           </div>
