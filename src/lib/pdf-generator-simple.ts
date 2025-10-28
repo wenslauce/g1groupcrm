@@ -161,7 +161,7 @@ export function generateSKRPDF(skr: SKRData): Buffer {
         doc.setTextColor(107, 114, 128)
         doc.text('Declared Value:', 25, yPos)
         doc.setTextColor(31, 41, 55)
-        doc.text(`${skr.asset.currency} ${skr.asset.declared_value.toLocaleString()}`, 70, yPos)
+        doc.text(`${skr.asset?.currency || 'USD'} ${skr.asset?.declared_value?.toLocaleString() || '0'}`, 70, yPos)
         yPos += 8
 
         doc.setTextColor(107, 114, 128)

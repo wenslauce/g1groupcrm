@@ -252,7 +252,7 @@ export function SecurityMonitor({ className }: SecurityMonitorProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Security Events</p>
-                <p className="text-2xl font-bold">{data.analysis.total_events.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{data?.analysis?.total_events?.toLocaleString() || '0'}</p>
                 <p className="text-xs text-gray-500">
                   {data.metrics.events_per_hour.toFixed(1)}/hour
                 </p>

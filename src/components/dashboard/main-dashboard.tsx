@@ -251,7 +251,7 @@ export function MainDashboard({ className }: MainDashboardProps) {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary.total_skrs.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{summary?.total_skrs?.toLocaleString() || '0'}</div>
             <div className="flex items-center text-xs text-muted-foreground">
               {getTrendIcon(mappedTrends.skr_growth)}
               <span className={`ml-1 ${getTrendColor(mappedTrends.skr_growth)}`}>

@@ -273,7 +273,7 @@ export function AuditDashboard({ className }: AuditDashboardProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Logs</p>
-                <p className="text-2xl font-bold">{stats.totalLogs.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{stats?.totalLogs?.toLocaleString() || '0'}</p>
               </div>
               <FileText className="h-8 w-8 text-blue-600" />
             </div>

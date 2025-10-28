@@ -295,7 +295,7 @@ export function NotificationManagement({ className }: NotificationManagementProp
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Notifications</p>
-                  <p className="text-2xl font-bold">{stats.total_notifications.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{stats?.total_notifications?.toLocaleString() || '0'}</p>
                 </div>
                 <Bell className="h-8 w-8 text-blue-600" />
               </div>
@@ -307,7 +307,7 @@ export function NotificationManagement({ className }: NotificationManagementProp
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Pending</p>
-                  <p className="text-2xl font-bold">{stats.pending_notifications}</p>
+                  <p className="text-2xl font-bold">{stats?.pending_notifications || 0}</p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-600" />
               </div>
@@ -319,7 +319,7 @@ export function NotificationManagement({ className }: NotificationManagementProp
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Sent</p>
-                  <p className="text-2xl font-bold">{stats.sent_notifications}</p>
+                  <p className="text-2xl font-bold">{stats?.sent_notifications || 0}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-600" />
               </div>
@@ -331,7 +331,7 @@ export function NotificationManagement({ className }: NotificationManagementProp
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Failed</p>
-                  <p className="text-2xl font-bold">{stats.failed_notifications}</p>
+                  <p className="text-2xl font-bold">{stats?.failed_notifications || 0}</p>
                 </div>
                 <AlertTriangle className="h-8 w-8 text-red-600" />
               </div>
@@ -354,20 +354,20 @@ export function NotificationManagement({ className }: NotificationManagementProp
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Total Sent</span>
-                  <span className="font-semibold">{stats.email_stats.total_sent}</span>
+                  <span className="font-semibold">{stats?.email_stats?.total_sent || 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Delivered</span>
-                  <span className="font-semibold text-green-600">{stats.email_stats.total_delivered}</span>
+                  <span className="font-semibold text-green-600">{stats?.email_stats?.total_delivered || 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Failed</span>
-                  <span className="font-semibold text-red-600">{stats.email_stats.total_failed}</span>
+                  <span className="font-semibold text-red-600">{stats?.email_stats?.total_failed || 0}</span>
                 </div>
                 <div className="pt-2 border-t">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Delivery Rate</span>
-                    <span className="font-bold">{stats.email_stats.delivery_rate.toFixed(1)}%</span>
+                    <span className="font-bold">{stats?.email_stats?.delivery_rate?.toFixed(1) || '0.0'}%</span>
                   </div>
                 </div>
               </div>
@@ -385,20 +385,20 @@ export function NotificationManagement({ className }: NotificationManagementProp
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Total Sent</span>
-                  <span className="font-semibold">{stats.sms_stats.total_sent}</span>
+                  <span className="font-semibold">{stats?.sms_stats?.total_sent || 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Delivered</span>
-                  <span className="font-semibold text-green-600">{stats.sms_stats.total_delivered}</span>
+                  <span className="font-semibold text-green-600">{stats?.sms_stats?.total_delivered || 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Failed</span>
-                  <span className="font-semibold text-red-600">{stats.sms_stats.total_failed}</span>
+                  <span className="font-semibold text-red-600">{stats?.sms_stats?.total_failed || 0}</span>
                 </div>
                 <div className="pt-2 border-t">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Delivery Rate</span>
-                    <span className="font-bold">{stats.sms_stats.delivery_rate.toFixed(1)}%</span>
+                    <span className="font-bold">{stats?.sms_stats?.delivery_rate?.toFixed(1) || '0.0'}%</span>
                   </div>
                 </div>
               </div>

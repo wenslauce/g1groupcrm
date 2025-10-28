@@ -198,7 +198,7 @@ export function ActivityMonitor({ className }: ActivityMonitorProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Activities</p>
-                <p className="text-2xl font-bold">{data.statistics.total_activities.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{data?.statistics?.total_activities?.toLocaleString() || '0'}</p>
               </div>
               <Activity className="h-8 w-8 text-blue-600" />
             </div>

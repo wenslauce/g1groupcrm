@@ -50,12 +50,12 @@ export function ClientForm({ client, onSave, onCancel }: ClientFormProps) {
         email: client.email || '',
         phone: client.phone || '',
         country: client.country || '',
-        address: client.address ? {
-          street: client.address.street || '',
-          city: client.address.city || '',
-          state: client.address.state || '',
-          postal_code: client.address.postal_code || '',
-          country: client.address.country || ''
+        address: client.address && typeof client.address === 'object' ? {
+          street: (client.address as any).street || '',
+          city: (client.address as any).city || '',
+          state: (client.address as any).state || '',
+          postal_code: (client.address as any).postal_code || '',
+          country: (client.address as any).country || ''
         } : {
           street: '',
           city: '',

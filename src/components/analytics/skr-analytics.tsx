@@ -247,7 +247,7 @@ export function SKRAnalytics({ className }: SKRAnalyticsProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total SKRs</p>
-                <p className="text-2xl font-bold">{performance_metrics.total_skrs.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{performance_metrics?.total_skrs?.toLocaleString() || '0'}</p>
               </div>
               <FileText className="h-8 w-8 text-blue-600" />
             </div>
