@@ -58,16 +58,37 @@ export interface AssetWithRelations extends Asset {
 
 export interface InvoiceWithRelations extends Invoice {
   client?: Client
+  clients?: Client
   skr?: SKR
   receipts?: Receipt[]
+  credit_notes?: CreditNote[]
+}
+
+export interface ReceiptWithRelations extends Receipt {
+  invoice?: Invoice
+  invoices?: Invoice & {
+    clients?: Client
+  }
+}
+
+export interface CreditNoteWithRelations extends CreditNote {
+  invoice?: Invoice & {
+    clients?: Client
+  }
 }
 
 // Enums
 export type ClientType = 'individual' | 'corporate' | 'institutional'
 export type RiskLevel = 'low' | 'medium' | 'high'
 export type ComplianceStatus = 'pending' | 'approved' | 'rejected' | 'under_review'
-export type SKRStatus = 'draft' | 'approved' | 'issued' | 'in_transit' | 'delivered' | 'closed'\nexport type TrackingStatus = 'in_vault' | 'in_transit' | 'at_destination' | 'delivered' | 'returned'
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'\nexport type PaymentMethod = 'cash' | 'bank_transfer' | 'credit_card' | 'debit_card' | 'check' | 'crypto' | 'other'\nexport type CreditNoteReason = 'return' | 'discount' | 'error' | 'cancellation' | 'other'\nexport type CreditNoteStatus = 'draft' | 'issued' | 'applied'\nexport type KYCDocumentStatus = 'pending' | 'approved' | 'rejected' | 'under_review'\nexport type DocumentType = 'passport' | 'national_id' | 'drivers_license' | 'utility_bill' | 'bank_statement' | 'proof_of_address' | 'business_registration' | 'articles_of_incorporation' | 'tax_certificate' | 'other'
+export type SKRStatus = 'draft' | 'approved' | 'issued' | 'in_transit' | 'delivered' | 'closed'
+export type TrackingStatus = 'in_vault' | 'in_transit' | 'at_destination' | 'delivered' | 'returned'
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'credit_card' | 'debit_card' | 'check' | 'crypto' | 'other'
+export type CreditNoteReason = 'return' | 'discount' | 'error' | 'cancellation' | 'other'
+export type CreditNoteStatus = 'draft' | 'issued' | 'applied'
+export type KYCDocumentStatus = 'pending' | 'approved' | 'rejected' | 'under_review'
+export type DocumentType = 'passport' | 'national_id' | 'drivers_license' | 'utility_bill' | 'bank_statement' | 'proof_of_address' | 'business_registration' | 'articles_of_incorporation' | 'tax_certificate' | 'other'
 export type UserRole = 'admin' | 'finance' | 'operations' | 'compliance' | 'read_only'
 export type UserStatus = 'active' | 'inactive' | 'suspended'
 
