@@ -111,7 +111,7 @@ export function KYCDocuments({ client, onUpdate }: KYCDocumentsProps) {
         doc.id === documentId 
           ? {
               ...doc,
-              status: action === 'approve' ? 'approved' : 'rejected',
+              status: (action === 'approve' ? 'approved' : 'rejected') as 'approved' | 'rejected',
               reviewed_at: new Date().toISOString(),
               reviewed_by: 'Current User', // In real app, get from auth context
               notes: notes || doc.notes
