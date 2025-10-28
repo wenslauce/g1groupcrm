@@ -7,9 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { Search, Filter, Download, Plus, Eye, Edit, Trash2, MapPin, Clock } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
+import { Search, Download, Plus, Eye, Edit, Trash2, MapPin, Clock } from 'lucide-react'
 
 interface SKR {
   id: string
@@ -54,14 +53,13 @@ export function SKRList() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [clientFilter, setClientFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage] = useState(1)
   const [itemsPerPage] = useState(10)
 
   useEffect(() => {
     fetchSKRs()
-  }, [searchTerm, statusFilter, clientFilter, dateFilter, currentPage])
+  }, [searchTerm, statusFilter, dateFilter, currentPage])
 
   const fetchSKRs = async () => {
     try {
@@ -72,7 +70,7 @@ export function SKRList() {
         limit: itemsPerPage.toString(),
         search: searchTerm,
         status: statusFilter !== 'all' ? statusFilter : '',
-        client_id: clientFilter !== 'all' ? clientFilter : '',
+
         date_range: dateFilter !== 'all' ? dateFilter : ''
       })
       

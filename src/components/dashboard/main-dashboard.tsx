@@ -19,11 +19,7 @@ import {
   Loader2,
   Package,
   Shield,
-  Activity,
-  BarChart3,
-  PieChart,
-  Calendar,
-  Bell
+  Activity
 } from 'lucide-react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
@@ -33,17 +29,28 @@ interface DashboardData {
   summary: {
     total_clients: number
     new_clients: number
-    approved_clients: number
+    approved_clients?: number
+    compliant_clients?: number
     total_skrs: number
-    active_skrs: number
-    issued_skrs: number
-    total_asset_value: number
-    total_invoice_amount: number
-    total_paid_amount: number
-    outstanding_amount: number
+    active_skrs?: number
+    issued_skrs?: number
+    in_transit_skrs?: number
+    delivered_skrs?: number
+    total_asset_value?: number
+    total_invoice_amount?: number
+    total_revenue?: number
+    total_paid_amount?: number
+    collected_revenue?: number
+    outstanding_amount?: number
     compliance_rate: number
   }
-  trends: {
+  growth?: {
+    client_growth: number
+    skr_growth: number
+    revenue_growth: number
+    asset_value_growth?: number
+  }
+  trends?: {
     client_growth: number
     skr_growth: number
     asset_value_growth: number
@@ -51,7 +58,7 @@ interface DashboardData {
   distributions: {
     client_types: Record<string, number>
     skr_status: Record<string, number>
-    asset_types: Record<string, number>
+    asset_types?: Record<string, number>
   }
   recent_activities: Array<{
     id: string
@@ -175,22 +182,22 @@ export function MainDashboard({ className }: MainDashboardProps) {
   const summary = {
     total_clients: apiSummary?.total_clients || 0,
     new_clients: apiSummary?.new_clients || 0,
-    approved_clients: apiSummary?.compliant_clients || 0,
+    approved_clients: apiSummary?.compliant_clients || apiSummary?.approved_clients || 0,
     total_skrs: apiSummary?.total_skrs || 0,
     active_skrs: (apiSummary?.issued_skrs || 0) + (apiSummary?.in_transit_skrs || 0),
     issued_skrs: apiSummary?.issued_skrs || 0,
     total_asset_value: 0, // Not available in current API
-    total_invoice_amount: apiSummary?.total_revenue || 0,
-    total_paid_amount: apiSummary?.collected_revenue || 0,
-    outstanding_amount: (apiSummary?.total_revenue || 0) - (apiSummary?.collected_revenue || 0),
+    total_invoice_amount: apiSummary?.total_revenue || apiSummary?.total_invoice_amount || 0,
+    total_paid_amount: apiSummary?.collected_revenue || apiSummary?.total_paid_amount || 0,
+    outstanding_amount: (apiSummary?.total_revenue || apiSummary?.total_invoice_amount || 0) - (apiSummary?.collected_revenue || apiSummary?.total_paid_amount || 0),
     compliance_rate: apiSummary?.compliance_rate || 0
   }
   
-  // Map trends to expected format
+  // Map trends to expected format - handle case where trends might not exist
   const mappedTrends = {
-    client_growth: trends?.client_growth || 0,
-    skr_growth: trends?.skr_growth || 0,
-    asset_value_growth: trends?.revenue_growth || 0 // Map revenue growth to asset value growth
+    client_growth: trends?.client_growth || data?.growth?.client_growth || 0,
+    skr_growth: trends?.skr_growth || data?.growth?.skr_growth || 0,
+    asset_value_growth: trends?.revenue_growth || data?.growth?.revenue_growth || 0 // Map revenue growth to asset value growth
   }
 
   return (

@@ -223,7 +223,7 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
               </div>
             </div>
 
-            {client.kyc_documents && client.kyc_documents.length > 0 && (
+            {client.kyc_documents && Array.isArray(client.kyc_documents) && client.kyc_documents.length > 0 && (
               <div className="pt-4 border-t">
                 <h4 className="text-sm font-medium mb-2">KYC Documents</h4>
                 <p className="text-sm text-muted-foreground">

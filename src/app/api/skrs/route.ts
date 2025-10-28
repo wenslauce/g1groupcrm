@@ -66,8 +66,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
     
+    // Calculate stats from the data
+    const stats = {
+      total: count || 0,
+      draft: data?.filter(skr => skr.status === 'draft').length || 0,
+      issued: data?.filter(skr => skr.status === 'issued').length || 0,
+      approved: data?.filter(skr => skr.status === 'approved').length || 0,
+      in_transit: data?.filter(skr => skr.status === 'in_transit').length || 0,
+      delivered: data?.filter(skr => skr.status === 'delivered').length || 0,
+      cancelled: data?.filter(skr => skr.status === 'cancelled').length || 0
+    }
+
+    // Map data to expected format
+    const skrs = data?.map(skr => ({
+      id: skr.id,
+      skr_number: skr.skr_number,
+      client_id: skr.client_id,
+      client_name: skr.client?.name || 'Unknown Client',
+      asset_id: skr.asset_id,
+      asset_description: skr.asset?.asset_name || 'Unknown Asset',
+      status: skr.status,
+      issue_date: skr.issue_date,
+      created_at: skr.created_at,
+      hash: skr.hash
+    })) || []
+
     return NextResponse.json({
       data,
+      skrs,
+      stats,
       count,
       page,
       limit,
