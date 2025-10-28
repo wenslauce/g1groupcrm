@@ -1,8 +1,19 @@
+import { ProtectedRoute } from '@/components/auth/protected-route'
+import { MonitoringDashboard } from '@/components/monitoring/monitoring-dashboard'
+
 export default function MonitoringPage() {
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Monitoring</h1>
-      <p className="text-muted-foreground">Monitoring dashboard coming soon...</p>
-    </div>
+    <ProtectedRoute requiredRoles={['admin', 'operations', 'compliance']}>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">System Monitoring</h1>
+          <p className="text-muted-foreground">
+            Real-time system health and performance monitoring
+          </p>
+        </div>
+
+        <MonitoringDashboard />
+      </div>
+    </ProtectedRoute>
   )
 }

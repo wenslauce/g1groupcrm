@@ -47,7 +47,7 @@ export const authClient = {
         .from('user_profiles')
         .insert({
           id: authData.user.id,
-          name: data.name,
+          full_name: data.name,
           role: data.role,
           department: data.department,
           email: data.email,

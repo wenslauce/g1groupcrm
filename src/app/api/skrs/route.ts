@@ -70,11 +70,11 @@ export async function GET(request: NextRequest) {
     const stats = {
       total: count || 0,
       draft: data?.filter(skr => skr.status === 'draft').length || 0,
-      issued: data?.filter(skr => skr.status === 'issued').length || 0,
       approved: data?.filter(skr => skr.status === 'approved').length || 0,
+      issued: data?.filter(skr => skr.status === 'issued').length || 0,
       in_transit: data?.filter(skr => skr.status === 'in_transit').length || 0,
       delivered: data?.filter(skr => skr.status === 'delivered').length || 0,
-      cancelled: data?.filter(skr => skr.status === 'cancelled').length || 0
+      closed: data?.filter(skr => skr.status === 'closed').length || 0
     }
 
     // Map data to expected format
@@ -92,7 +92,6 @@ export async function GET(request: NextRequest) {
     })) || []
 
     return NextResponse.json({
-      data,
       skrs,
       stats,
       count,

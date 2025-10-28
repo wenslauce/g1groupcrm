@@ -559,7 +559,7 @@ export function FinancialAnalytics({ className }: FinancialAnalyticsProps) {
                     <p className="font-medium">
                       {formatCurrency(transaction.amount, transaction.currency)}
                     </p>
-                    <Badge className={getStatusColor(transaction.status)} size="sm">
+                    <Badge className={getStatusColor(transaction.status)}>
                       {transaction.status}
                     </Badge>
                   </div>

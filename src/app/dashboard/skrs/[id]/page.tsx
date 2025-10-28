@@ -60,6 +60,48 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
     fetchSKR() // Refresh data after updates
   }
 
+  const handleGeneratePDF = async () => {
+    if (!skr) return
+    
+    try {
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'skr',
+          id: skr.id
+        })
+      })
+
+      if (response.ok) {
+        const contentType = response.headers.get('content-type')
+        if (contentType === 'application/pdf') {
+          // Download PDF
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `SKR-${skr.skr_number}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+        } else {
+          const result = await response.json()
+          alert(result.message || 'PDF generation not available')
+        }
+      } else {
+        const error = await response.json()
+        alert(`Failed to generate PDF: ${error.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      alert('Error generating PDF')
+    }
+  }
+
   if (loading) {
     return (
       <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>
@@ -110,12 +152,10 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
               <Edit className="mr-2 h-4 w-4" />
               Edit
             </Button>
-            {skr.pdf_url && (
-              <Button variant="outline" size="sm">
-                <Download className="mr-2 h-4 w-4" />
-                Download PDF
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={handleGeneratePDF}>
+              <Download className="mr-2 h-4 w-4" />
+              Generate PDF
+            </Button>
           </div>
         </div>
 
@@ -308,12 +348,14 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
                   <Package className="mr-2 h-4 w-4" />
                   Track Asset
                 </Button>
-                {skr.status === 'issued' && (
-                  <Button variant="outline" className="w-full justify-start">
-                    <Download className="mr-2 h-4 w-4" />
-                    Generate PDF
-                  </Button>
-                )}
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={handleGeneratePDF}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Generate PDF
+                </Button>
               </CardContent>
             </Card>
           </div>

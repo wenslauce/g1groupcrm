@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDate } from '@/lib/utils'
+import { skrUtils } from '@/lib/skr-utils'
 import { Search, Download, Plus, Eye, Edit, Trash2, MapPin, Clock } from 'lucide-react'
 
 interface SKR {
@@ -17,7 +18,7 @@ interface SKR {
   client_name: string
   asset_id: string
   asset_description: string
-  status: 'draft' | 'issued' | 'in_transit' | 'delivered' | 'cancelled'
+  status: 'draft' | 'approved' | 'issued' | 'in_transit' | 'delivered' | 'closed'
   issue_date: string
   created_at: string
   hash?: string
@@ -33,10 +34,11 @@ interface SKR {
 interface SKRStats {
   total: number
   draft: number
+  approved: number
   issued: number
   in_transit: number
   delivered: number
-  cancelled: number
+  closed: number
 }
 
 export function SKRList() {
@@ -44,10 +46,11 @@ export function SKRList() {
   const [stats, setStats] = useState<SKRStats>({
     total: 0,
     draft: 0,
+    approved: 0,
     issued: 0,
     in_transit: 0,
     delivered: 0,
-    cancelled: 0
+    closed: 0
   })
   
   const [loading, setLoading] = useState(true)
@@ -88,27 +91,22 @@ export function SKRList() {
   }
 
   const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      draft: 'bg-gray-100 text-gray-800',
-      issued: 'bg-blue-100 text-blue-800',
-      in_transit: 'bg-yellow-100 text-yellow-800',
-      delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800'
-    }
-    return colors[status] || 'bg-gray-100 text-gray-800'
+    return skrUtils.getStatusColor(status as any)
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'draft':
         return <Clock className="h-4 w-4" />
+      case 'approved':
+        return <Eye className="h-4 w-4" />
       case 'issued':
         return <Download className="h-4 w-4" />
       case 'in_transit':
         return <MapPin className="h-4 w-4" />
       case 'delivered':
         return <Eye className="h-4 w-4" />
-      case 'cancelled':
+      case 'closed':
         return <Trash2 className="h-4 w-4" />
       default:
         return null
@@ -142,7 +140,7 @@ export function SKRList() {
     }
   }
 
-  const handleGeneratePDF = async (skrId: string) => {
+  const handleGeneratePDF = async (skrId: string, skrNumber: string) => {
     try {
       const response = await fetch('/api/generate-pdf', {
         method: 'POST',
@@ -150,23 +148,37 @@ export function SKRList() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          document_type: 'skr',
-          document_id: skrId
+          type: 'skr',
+          id: skrId
         })
       })
 
       if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `skr-${skrId}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+        // Check if response is PDF
+        const contentType = response.headers.get('content-type')
+        if (contentType === 'application/pdf') {
+          // Download PDF
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `SKR-${skrNumber}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+        } else {
+          // Handle JSON response (error or not implemented)
+          const result = await response.json()
+          if (result.success === false) {
+            alert(result.message || 'PDF generation not available')
+          } else {
+            alert('Unexpected response format')
+          }
+        }
       } else {
-        alert('Failed to generate PDF')
+        const error = await response.json()
+        alert(`Failed to generate PDF: ${error.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Error generating PDF:', error)
@@ -205,7 +217,7 @@ export function SKRList() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total</CardTitle>
@@ -226,10 +238,19 @@ export function SKRList() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Approved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{stats.approved}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Issued</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.issued}</div>
+            <div className="text-2xl font-bold text-yellow-600">{stats.issued}</div>
           </CardContent>
         </Card>
 
@@ -253,10 +274,10 @@ export function SKRList() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
+            <CardTitle className="text-sm font-medium">Closed</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
+            <div className="text-2xl font-bold text-purple-600">{stats.closed}</div>
           </CardContent>
         </Card>
       </div>
@@ -283,10 +304,11 @@ export function SKRList() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="issued">Issued</SelectItem>
                 <SelectItem value="in_transit">In Transit</SelectItem>
                 <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
               </SelectContent>
             </Select>
             <Select value={dateFilter} onValueChange={setDateFilter}>
@@ -337,7 +359,7 @@ export function SKRList() {
                     <Badge className={getStatusColor(skr.status)}>
                       <div className="flex items-center space-x-1">
                         {getStatusIcon(skr.status)}
-                        <span>{skr.status.replace('_', ' ').toUpperCase()}</span>
+                        <span>{skrUtils.getStatusDisplayName(skr.status as any)}</span>
                       </div>
                     </Badge>
                   </TableCell>
@@ -357,6 +379,7 @@ export function SKRList() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleViewSKR(skr.id)}
+                        title="View Details"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -364,13 +387,15 @@ export function SKRList() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleEditSKR(skr.id)}
+                        title="Edit SKR"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleGeneratePDF(skr.id)}
+                        onClick={() => handleGeneratePDF(skr.id, skr.skr_number)}
+                        title="Generate PDF"
                       >
                         <Download className="h-4 w-4" />
                       </Button>
@@ -378,6 +403,7 @@ export function SKRList() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleVerifySKR(skr.skr_number)}
+                        title="Verify SKR"
                       >
                         <Search className="h-4 w-4" />
                       </Button>
@@ -385,6 +411,8 @@ export function SKRList() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDeleteSKR(skr.id)}
+                        title="Delete SKR"
+                        className="text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
