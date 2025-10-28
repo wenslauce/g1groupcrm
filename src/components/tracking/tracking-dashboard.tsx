@@ -1,1 +1,229 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { Button } from '@/components/ui/button'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'\nimport { \n  MapPin, \n  Clock, \n  Route, \n  Navigation,\n  Loader2,\n  AlertTriangle,\n  Plus\n} from 'lucide-react'\nimport { SKRWithRelations, TrackingRecord } from '@/types'\nimport { TrackingTimeline } from './tracking-timeline'\nimport { TrackingMap } from './tracking-map'\nimport { LocationUpdateForm } from './location-update-form'\nimport { usePermissions } from '@/contexts/auth-context'\n\ninterface TrackingDashboardProps {\n  skr: SKRWithRelations\n}\n\nexport function TrackingDashboard({ skr }: TrackingDashboardProps) {\n  const [trackingRecords, setTrackingRecords] = useState<TrackingRecord[]>([])\n  const [loading, setLoading] = useState(true)\n  const [error, setError] = useState('')\n  const [showAddForm, setShowAddForm] = useState(false)\n  const [activeTab, setActiveTab] = useState('timeline')\n  \n  const permissions = usePermissions()\n\n  useEffect(() => {\n    fetchTrackingData()\n  }, [skr.id])\n\n  const fetchTrackingData = async () => {\n    setLoading(true)\n    try {\n      const response = await fetch(`/api/skrs/${skr.id}/tracking`)\n      const result = await response.json()\n      \n      if (!response.ok) {\n        throw new Error(result.error || 'Failed to fetch tracking data')\n      }\n      \n      setTrackingRecords(result.data)\n    } catch (error) {\n      setError(error instanceof Error ? error.message : 'An error occurred')\n    } finally {\n      setLoading(false)\n    }\n  }\n\n  const handleUpdate = () => {\n    setShowAddForm(false)\n    fetchTrackingData()\n  }\n\n  const recordsWithCoordinates = trackingRecords.filter(\n    record => record.latitude && record.longitude\n  )\n\n  const totalDistance = recordsWithCoordinates.reduce((total, record) => \n    total + (record.distanceTraveled || 0), 0\n  )\n\n  const uniqueLocations = new Set(trackingRecords.map(r => r.location)).size\n\n  if (loading) {\n    return (\n      <Card>\n        <CardContent className=\"p-6\">\n          <div className=\"flex items-center justify-center\">\n            <Loader2 className=\"h-8 w-8 animate-spin\" />\n          </div>\n        </CardContent>\n      </Card>\n    )\n  }\n\n  if (error) {\n    return (\n      <Card>\n        <CardContent className=\"p-6\">\n          <div className=\"text-center text-red-600\">\n            <AlertTriangle className=\"h-12 w-12 mx-auto mb-4 opacity-50\" />\n            <p>{error}</p>\n            <Button onClick={fetchTrackingData} className=\"mt-4\">\n              Try Again\n            </Button>\n          </div>\n        </CardContent>\n      </Card>\n    )\n  }\n\n  return (\n    <div className=\"space-y-6\">\n      {/* Header */}\n      <div className=\"flex items-center justify-between\">\n        <div>\n          <h2 className=\"text-2xl font-bold tracking-tight\">Asset Tracking</h2>\n          <p className=\"text-muted-foreground\">\n            Monitor the location and movement of {skr.skr_number}\n          </p>\n        </div>\n        {permissions.canCreateSKRs() && (\n          <Button \n            onClick={() => setShowAddForm(true)}\n            className=\"bg-g1-primary hover:bg-g1-primary/90\"\n          >\n            <Plus className=\"mr-2 h-4 w-4\" />\n            Add Location\n          </Button>\n        )}\n      </div>\n\n      {/* Add Location Form */}\n      {showAddForm && (\n        <LocationUpdateForm\n          skr={skr}\n          onUpdate={handleUpdate}\n          onCancel={() => setShowAddForm(false)}\n        />\n      )}\n\n      {/* Summary Stats */}\n      <div className=\"grid grid-cols-1 md:grid-cols-4 gap-4\">\n        <Card>\n          <CardContent className=\"p-6\">\n            <div className=\"flex items-center gap-2\">\n              <MapPin className=\"h-5 w-5 text-blue-500\" />\n              <div>\n                <div className=\"text-2xl font-bold\">{trackingRecords.length}</div>\n                <div className=\"text-sm text-muted-foreground\">Total Updates</div>\n              </div>\n            </div>\n          </CardContent>\n        </Card>\n\n        <Card>\n          <CardContent className=\"p-6\">\n            <div className=\"flex items-center gap-2\">\n              <Navigation className=\"h-5 w-5 text-green-500\" />\n              <div>\n                <div className=\"text-2xl font-bold\">{uniqueLocations}</div>\n                <div className=\"text-sm text-muted-foreground\">Unique Locations</div>\n              </div>\n            </div>\n          </CardContent>\n        </Card>\n\n        <Card>\n          <CardContent className=\"p-6\">\n            <div className=\"flex items-center gap-2\">\n              <Route className=\"h-5 w-5 text-orange-500\" />\n              <div>\n                <div className=\"text-2xl font-bold\">{totalDistance.toFixed(0)} km</div>\n                <div className=\"text-sm text-muted-foreground\">Distance Traveled</div>\n              </div>\n            </div>\n          </CardContent>\n        </Card>\n\n        <Card>\n          <CardContent className=\"p-6\">\n            <div className=\"flex items-center gap-2\">\n              <Clock className=\"h-5 w-5 text-purple-500\" />\n              <div>\n                <div className=\"text-2xl font-bold\">{recordsWithCoordinates.length}</div>\n                <div className=\"text-sm text-muted-foreground\">GPS Coordinates</div>\n              </div>\n            </div>\n          </CardContent>\n        </Card>\n      </div>\n\n      {/* Current Location */}\n      {trackingRecords.length > 0 && (\n        <Card>\n          <CardHeader>\n            <CardTitle className=\"flex items-center gap-2\">\n              <MapPin className=\"h-5 w-5\" />\n              Current Location\n            </CardTitle>\n          </CardHeader>\n          <CardContent>\n            <div className=\"flex items-center justify-between\">\n              <div>\n                <div className=\"text-lg font-semibold\">{trackingRecords[0].location}</div>\n                <div className=\"text-sm text-muted-foreground\">\n                  Last updated: {new Date(trackingRecords[0].created_at).toLocaleString()}\n                </div>\n                {trackingRecords[0].latitude && trackingRecords[0].longitude && (\n                  <div className=\"text-sm text-muted-foreground\">\n                    Coordinates: {trackingRecords[0].latitude.toFixed(6)}, {trackingRecords[0].longitude.toFixed(6)}\n                  </div>\n                )}\n              </div>\n              <div className=\"text-right\">\n                <div className=\"text-sm text-muted-foreground\">Recorded by</div>\n                <div className=\"font-medium\">{trackingRecords[0].recorded_by_user?.name || 'System'}</div>\n              </div>\n            </div>\n          </CardContent>\n        </Card>\n      )}\n\n      {/* Tracking Views */}\n      <Tabs value={activeTab} onValueChange={setActiveTab}>\n        <TabsList className=\"grid w-full grid-cols-2\">\n          <TabsTrigger value=\"timeline\">Timeline View</TabsTrigger>\n          <TabsTrigger value=\"map\">Map View</TabsTrigger>\n        </TabsList>\n        \n        <TabsContent value=\"timeline\" className=\"mt-6\">\n          <TrackingTimeline skr={skr} showAddButton={false} />\n        </TabsContent>\n        \n        <TabsContent value=\"map\" className=\"mt-6\">\n          <TrackingMap skr={skr} trackingRecords={trackingRecords} />\n        </TabsContent>\n      </Tabs>\n    </div>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { 
+  MapPin, 
+  Clock, 
+  Route, 
+  Navigation, 
+  Loader2, 
+  AlertTriangle, 
+  Plus
+} from 'lucide-react'
+import { SKRWithRelations, TrackingRecord } from '@/types'
+import { TrackingTimeline } from './tracking-timeline'
+import { TrackingMap } from './tracking-map'
+import { LocationUpdateForm } from './location-update-form'
+import { usePermissions } from '@/contexts/auth-context'
+
+interface TrackingDashboardProps {
+  skr: SKRWithRelations
+}
+
+export function TrackingDashboard({ skr }: TrackingDashboardProps) {
+  const [trackingRecords, setTrackingRecords] = useState<TrackingRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [activeTab, setActiveTab] = useState('timeline')
+  
+  const permissions = usePermissions()
+
+  useEffect(() => {
+    fetchTrackingData()
+  }, [skr.id])
+
+  const fetchTrackingData = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/skrs/${skr.id}/tracking`)
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch tracking data')
+      }
+      
+      setTrackingRecords(result.data)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdate = () => {
+    setShowAddForm(false)
+    fetchTrackingData()
+  }
+
+  const recordsWithCoordinates = trackingRecords.filter(
+    record => record.latitude && record.longitude
+  )
+
+  const totalDistance = recordsWithCoordinates.reduce((total, record) => 
+    total + (record.distanceTraveled || 0), 0
+  )
+
+  const uniqueLocations = new Set(trackingRecords.map(r => r.location)).size
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-600">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>{error}</p>
+            <Button onClick={fetchTrackingData} className="mt-4">
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Asset Tracking</h2>
+          <p className="text-muted-foreground">
+            Monitor the location and movement of {skr.skr_number}
+          </p>
+        </div>
+        {permissions.canCreateSKRs() && (
+          <Button 
+            onClick={() => setShowAddForm(true)}
+            className="bg-g1-primary hover:bg-g1-primary/90"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Location
+          </Button>
+        )}
+      </div>
+
+      {/* Add Location Form */}
+      {showAddForm && (
+        <LocationUpdateForm
+          skr={skr}
+          onUpdate={handleUpdate}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-blue-500" />
+              <div>
+                <div className="text-2xl font-bold">{trackingRecords.length}</div>
+                <div className="text-sm text-muted-foreground">Total Updates</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2">
+              <Navigation className="h-5 w-5 text-green-500" />
+              <div>
+                <div className="text-2xl font-bold">{uniqueLocations}</div>
+                <div className="text-sm text-muted-foreground">Unique Locations</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2">
+              <Route className="h-5 w-5 text-orange-500" />
+              <div>
+                <div className="text-2xl font-bold">{totalDistance.toFixed(0)} km</div>
+                <div className="text-sm text-muted-foreground">Distance Traveled</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-purple-500" />
+              <div>
+                <div className="text-2xl font-bold">{recordsWithCoordinates.length}</div>
+                <div className="text-sm text-muted-foreground">GPS Coordinates</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Current Location */}
+      {trackingRecords.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Current Location
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-lg font-semibold">{trackingRecords[0].location}</div>
+                <div className="text-sm text-muted-foreground">
+                  Last updated: {new Date(trackingRecords[0].created_at).toLocaleString()}
+                </div>
+                {trackingRecords[0].latitude && trackingRecords[0].longitude && (
+                  <div className="text-sm text-muted-foreground">
+                    Coordinates: {trackingRecords[0].latitude.toFixed(6)}, {trackingRecords[0].longitude.toFixed(6)}
+                  </div>
+                )}
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">Recorded by</div>
+                <div className="font-medium">{trackingRecords[0].recorded_by_user?.name || 'System'}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tracking Views */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="timeline">Timeline View</TabsTrigger>
+          <TabsTrigger value="map">Map View</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="timeline" className="mt-6">
+          <TrackingTimeline skr={skr} showAddButton={false} />
+        </TabsContent>
+        
+        <TabsContent value="map" className="mt-6">
+          <TrackingMap skr={skr} trackingRecords={trackingRecords} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}

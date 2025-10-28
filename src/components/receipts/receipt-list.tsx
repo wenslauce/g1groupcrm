@@ -282,7 +282,7 @@ export function ReceiptList() {
                         <TableCell>{formatCurrency(receipt.amount)}</TableCell>
                         <TableCell>
                           <Badge variant="outline">
-                            {financialUtils.getPaymentMethodDisplayName(receipt.payment_method)}
+                            {financialUtils.getPaymentMethodDisplayName(receipt.payment_method as any)}
                           </Badge>
                         </TableCell>
                         <TableCell>{receipt.payment_reference || '-'}</TableCell>

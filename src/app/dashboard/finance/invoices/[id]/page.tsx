@@ -165,8 +165,8 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsPageProps) 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge className={financialUtils.getInvoiceStatusColor(invoice.status)}>
-              {financialUtils.getInvoiceStatusDisplayName(invoice.status)}
+            <Badge className={financialUtils.getInvoiceStatusColor(invoice.status as any)}>
+              {financialUtils.getInvoiceStatusDisplayName(invoice.status as any)}
             </Badge>
             <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/finance/invoices/${invoice.id}/edit`)}>
               <Edit className="mr-2 h-4 w-4" />
@@ -198,8 +198,8 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsPageProps) 
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-muted-foreground">Status</div>
-                    <Badge className={financialUtils.getInvoiceStatusColor(invoice.status)}>
-                      {financialUtils.getInvoiceStatusDisplayName(invoice.status)}
+                    <Badge className={financialUtils.getInvoiceStatusColor(invoice.status as any)}>
+                      {financialUtils.getInvoiceStatusDisplayName(invoice.status as any)}
                     </Badge>
                   </div>
                   <div className="space-y-2">
@@ -216,7 +216,7 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsPageProps) 
                     <div className="text-sm font-medium text-muted-foreground">Issue Date</div>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      {formatDateTime(invoice.issue_date)}
+                      {formatDateTime(invoice.created_at)}
                     </div>
                   </div>
                   {invoice.due_date && (

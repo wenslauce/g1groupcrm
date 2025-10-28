@@ -135,21 +135,12 @@ export default function AssetDetailsPage({ params }: AssetDetailsPageProps) {
                     <div className="text-lg">{asset.currency}</div>
                   </div>
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Origin</div>
+                    <div className="text-sm font-medium text-muted-foreground">Client</div>
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
-                      {asset.origin}
+                      {asset.client?.name || 'Unknown Client'}
                     </div>
                   </div>
-                  {asset.destination && (
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium text-muted-foreground">Destination</div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        {asset.destination}
-                      </div>
-                    </div>
-                  )}
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-muted-foreground">Created</div>
                     <div className="flex items-center gap-2">
@@ -159,12 +150,12 @@ export default function AssetDetailsPage({ params }: AssetDetailsPageProps) {
                   </div>
                 </div>
 
-                {asset.specifications && Object.keys(asset.specifications).length > 0 && (
+                {asset.metadata && Object.keys(asset.metadata).length > 0 && (
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Specifications</div>
+                    <div className="text-sm font-medium text-muted-foreground">Metadata</div>
                     <div className="p-3 bg-muted rounded-lg">
                       <pre className="text-xs whitespace-pre-wrap">
-                        {JSON.stringify(asset.specifications, null, 2)}
+                        {JSON.stringify(asset.metadata, null, 2)}
                       </pre>
                     </div>
                   </div>
@@ -268,15 +259,9 @@ export default function AssetDetailsPage({ params }: AssetDetailsPageProps) {
                     <span>{asset.asset_type}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Origin:</span>
-                    <span>{asset.origin}</span>
+                    <span className="text-muted-foreground">Client:</span>
+                    <span>{asset.client?.name || 'Unknown'}</span>
                   </div>
-                  {asset.destination && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Destination:</span>
-                      <span>{asset.destination}</span>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>

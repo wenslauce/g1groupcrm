@@ -97,7 +97,7 @@ export function GlobalSearchBar({
         setResults(searchResponse.results)
       }
 
-      if (suggestionsResponse.error) {
+      if ('error' in suggestionsResponse && suggestionsResponse.error) {
         console.error('Suggestions error:', suggestionsResponse.error)
         setSuggestions([])
       } else {

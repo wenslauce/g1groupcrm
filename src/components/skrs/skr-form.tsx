@@ -112,7 +112,7 @@ export function SKRForm({ skr, onSave, onCancel }: SKRFormProps) {
         client_id: skr.client_id || '',
         asset_id: skr.asset_id || '',
         remarks: skr.remarks || '',
-        metadata: skr.metadata || {}
+        metadata: (skr.metadata as Record<string, any>) || {}
       })
     }
   }, [skr])

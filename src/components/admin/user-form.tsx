@@ -34,7 +34,7 @@ export function UserForm({ user, onSave, onCancel }: UserFormProps) {
   useEffect(() => {
     if (user) {
       setFormData({
-        name: user.name || '',
+        name: user.full_name || '',
         email: user.email || '',
         password: '', // Never populate password for editing
         role: user.role || '',

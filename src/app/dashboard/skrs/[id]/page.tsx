@@ -145,8 +145,8 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge className={skrUtils.getStatusColor(skr.status)}>
-              {skrUtils.getStatusDisplayName(skr.status)}
+            <Badge className={skrUtils.getStatusColor(skr.status as any)}>
+              {skrUtils.getStatusDisplayName(skr.status as any)}
             </Badge>
             <Button variant="outline" size="sm">
               <Edit className="mr-2 h-4 w-4" />
@@ -178,8 +178,8 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-muted-foreground">Status</div>
-                    <Badge className={skrUtils.getStatusColor(skr.status)}>
-                      {skrUtils.getStatusDisplayName(skr.status)}
+                    <Badge className={skrUtils.getStatusColor(skr.status as any)}>
+                      {skrUtils.getStatusDisplayName(skr.status as any)}
                     </Badge>
                   </div>
                   <div className="space-y-2">
@@ -240,8 +240,8 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
                       <Badge className={clientUtils.getTypeColor(skr.client.type)}>
                         {clientUtils.getTypeDisplayName(skr.client.type)}
                       </Badge>
-                      <Badge className={clientUtils.getComplianceStatusColor(skr.client.compliance_status)}>
-                        {clientUtils.getComplianceStatusDisplayName(skr.client.compliance_status)}
+                      <Badge className={clientUtils.getComplianceStatusColor(skr.client.compliance_status as any)}>
+                        {clientUtils.getComplianceStatusDisplayName(skr.client.compliance_status as any)}
                       </Badge>
                     </div>
                   </div>
@@ -297,12 +297,8 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-muted-foreground">Origin:</span>
-                      <span className="ml-2">{skr.asset.origin}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Destination:</span>
-                      <span className="ml-2">{skr.asset.destination || 'Not specified'}</span>
+                      <span className="text-muted-foreground">Client:</span>
+                      <span className="ml-2">{skr.client?.name || 'Unknown'}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Currency:</span>
@@ -314,12 +310,12 @@ export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
                     </div>
                   </div>
 
-                  {skr.asset.specifications && Object.keys(skr.asset.specifications).length > 0 && (
+                  {skr.asset.metadata && Object.keys(skr.asset.metadata).length > 0 && (
                     <div className="space-y-2">
-                      <div className="text-sm font-medium text-muted-foreground">Specifications</div>
+                      <div className="text-sm font-medium text-muted-foreground">Metadata</div>
                       <div className="p-3 bg-muted rounded-lg">
                         <pre className="text-xs whitespace-pre-wrap">
-                          {JSON.stringify(skr.asset.specifications, null, 2)}
+                          {JSON.stringify(skr.asset.metadata, null, 2)}
                         </pre>
                       </div>
                     </div>

@@ -274,7 +274,7 @@ export function CreditNoteList() {
                         <TableCell>{formatCurrency(creditNote.amount)}</TableCell>
                         <TableCell>
                           <Badge variant="outline">
-                            {financialUtils.getCreditNoteReasonDisplayName(creditNote.reason)}
+                            {financialUtils.getCreditNoteReasonDisplayName(creditNote.reason as any)}
                           </Badge>
                         </TableCell>
                         <TableCell>{formatDateTime(creditNote.issue_date)}</TableCell>

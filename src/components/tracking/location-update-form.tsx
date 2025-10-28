@@ -1,1 +1,323 @@
-'use client'\n\nimport { useState } from 'react'\nimport { Button } from '@/components/ui/button'\nimport { Input } from '@/components/ui/input'\nimport { Label } from '@/components/ui/label'\nimport { Textarea } from '@/components/ui/textarea'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'\nimport { Badge } from '@/components/ui/badge'\nimport { \n  MapPin, \n  Save, \n  X, \n  Loader2, \n  Navigation,\n  Clock,\n  AlertTriangle\n} from 'lucide-react'\nimport { SKRWithRelations } from '@/types'\nimport { trackingUtils } from '@/lib/tracking-utils'\nimport { LocationUpdateData } from '@/lib/validations/tracking'\n\ninterface LocationUpdateFormProps {\n  skr: SKRWithRelations\n  onUpdate?: () => void\n  onCancel?: () => void\n}\n\nexport function LocationUpdateForm({ skr, onUpdate, onCancel }: LocationUpdateFormProps) {\n  const [formData, setFormData] = useState<LocationUpdateData>({\n    skr_id: skr.id,\n    location: '',\n    latitude: undefined,\n    longitude: undefined,\n    notes: ''\n  })\n  const [isLoading, setIsLoading] = useState(false)\n  const [error, setError] = useState('')\n  const [success, setSuccess] = useState('')\n  const [useCurrentLocation, setUseCurrentLocation] = useState(false)\n\n  const handleLocationSuggestion = (location: string) => {\n    setFormData(prev => ({ ...prev, location }))\n  }\n\n  const getCurrentLocation = () => {\n    setUseCurrentLocation(true)\n    \n    if (!navigator.geolocation) {\n      setError('Geolocation is not supported by this browser')\n      setUseCurrentLocation(false)\n      return\n    }\n\n    navigator.geolocation.getCurrentPosition(\n      (position) => {\n        setFormData(prev => ({\n          ...prev,\n          latitude: position.coords.latitude,\n          longitude: position.coords.longitude\n        }))\n        setUseCurrentLocation(false)\n      },\n      (error) => {\n        setError(`Failed to get location: ${error.message}`)\n        setUseCurrentLocation(false)\n      },\n      {\n        enableHighAccuracy: true,\n        timeout: 10000,\n        maximumAge: 60000\n      }\n    )\n  }\n\n  const handleSubmit = async (e: React.FormEvent) => {\n    e.preventDefault()\n    setIsLoading(true)\n    setError('')\n    setSuccess('')\n\n    try {\n      const response = await fetch(`/api/skrs/${skr.id}/tracking`, {\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json'\n        },\n        body: JSON.stringify(formData)\n      })\n\n      const result = await response.json()\n\n      if (!response.ok) {\n        throw new Error(result.error || 'Failed to update location')\n      }\n\n      setSuccess('Location updated successfully!')\n      \n      // Reset form\n      setFormData({\n        skr_id: skr.id,\n        location: '',\n        latitude: undefined,\n        longitude: undefined,\n        notes: ''\n      })\n      \n      if (onUpdate) {\n        setTimeout(() => onUpdate(), 1000)\n      }\n    } catch (error) {\n      setError(error instanceof Error ? error.message : 'An error occurred')\n    } finally {\n      setIsLoading(false)\n    }\n  }\n\n  const updateFormData = (field: string, value: any) => {\n    setFormData(prev => ({ ...prev, [field]: value }))\n  }\n\n  return (\n    <Card>\n      <CardHeader>\n        <div className=\"flex items-center justify-between\">\n          <div>\n            <CardTitle className=\"flex items-center gap-2\">\n              <MapPin className=\"h-5 w-5\" />\n              Update Location\n            </CardTitle>\n            <CardDescription>\n              Record a new location for SKR {skr.skr_number}\n            </CardDescription>\n          </div>\n          {onCancel && (\n            <Button variant=\"ghost\" size=\"icon\" onClick={onCancel}>\n              <X className=\"h-4 w-4\" />\n            </Button>\n          )}\n        </div>\n      </CardHeader>\n      <CardContent>\n        <form onSubmit={handleSubmit} className=\"space-y-6\">\n          {/* SKR Information */}\n          <div className=\"p-4 bg-muted rounded-lg\">\n            <div className=\"flex items-center justify-between mb-2\">\n              <h4 className=\"font-medium\">SKR Details</h4>\n              <Badge className={`bg-${skr.status === 'in_transit' ? 'orange' : 'blue'}-100 text-${skr.status === 'in_transit' ? 'orange' : 'blue'}-800`}>\n                {skr.status.replace('_', ' ').toUpperCase()}\n              </Badge>\n            </div>\n            <div className=\"grid grid-cols-1 md:grid-cols-2 gap-2 text-sm\">\n              <div>\n                <span className=\"text-muted-foreground\">Client:</span>\n                <span className=\"ml-2 font-medium\">{skr.client?.name}</span>\n              </div>\n              <div>\n                <span className=\"text-muted-foreground\">Asset:</span>\n                <span className=\"ml-2 font-medium\">{skr.asset?.asset_name}</span>\n              </div>\n            </div>\n          </div>\n\n          {/* Location Input */}\n          <div className=\"space-y-4\">\n            <div className=\"space-y-2\">\n              <Label htmlFor=\"location\">Location *</Label>\n              <Input\n                id=\"location\"\n                value={formData.location}\n                onChange={(e) => updateFormData('location', e.target.value)}\n                placeholder=\"Enter current location\"\n                required\n                disabled={isLoading}\n              />\n            </div>\n\n            {/* Location Suggestions */}\n            <div className=\"space-y-2\">\n              <Label>Quick Locations</Label>\n              <div className=\"flex flex-wrap gap-2\">\n                {trackingUtils.getLocationSuggestions().slice(0, 8).map((location) => (\n                  <Button\n                    key={location}\n                    type=\"button\"\n                    variant=\"outline\"\n                    size=\"sm\"\n                    onClick={() => handleLocationSuggestion(location)}\n                    disabled={isLoading}\n                  >\n                    {location}\n                  </Button>\n                ))}\n              </div>\n            </div>\n          </div>\n\n          {/* Coordinates */}\n          <div className=\"space-y-4\">\n            <div className=\"flex items-center justify-between\">\n              <Label>Coordinates (Optional)</Label>\n              <Button\n                type=\"button\"\n                variant=\"outline\"\n                size=\"sm\"\n                onClick={getCurrentLocation}\n                disabled={isLoading || useCurrentLocation}\n              >\n                {useCurrentLocation ? (\n                  <>\n                    <Loader2 className=\"mr-2 h-4 w-4 animate-spin\" />\n                    Getting Location...\n                  </>\n                ) : (\n                  <>\n                    <Navigation className=\"mr-2 h-4 w-4\" />\n                    Use Current Location\n                  </>\n                )}\n              </Button>\n            </div>\n            \n            <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"latitude\">Latitude</Label>\n                <Input\n                  id=\"latitude\"\n                  type=\"number\"\n                  step=\"any\"\n                  value={formData.latitude || ''}\n                  onChange={(e) => updateFormData('latitude', e.target.value ? parseFloat(e.target.value) : undefined)}\n                  placeholder=\"e.g., 51.5074\"\n                  disabled={isLoading}\n                />\n              </div>\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"longitude\">Longitude</Label>\n                <Input\n                  id=\"longitude\"\n                  type=\"number\"\n                  step=\"any\"\n                  value={formData.longitude || ''}\n                  onChange={(e) => updateFormData('longitude', e.target.value ? parseFloat(e.target.value) : undefined)}\n                  placeholder=\"e.g., -0.1278\"\n                  disabled={isLoading}\n                />\n              </div>\n            </div>\n            \n            {formData.latitude && formData.longitude && (\n              <div className=\"text-sm text-muted-foreground\">\n                Coordinates: {trackingUtils.formatCoordinates(formData.latitude, formData.longitude)}\n              </div>\n            )}\n          </div>\n\n          {/* Notes */}\n          <div className=\"space-y-2\">\n            <Label htmlFor=\"notes\">Notes</Label>\n            <Textarea\n              id=\"notes\"\n              value={formData.notes}\n              onChange={(e) => updateFormData('notes', e.target.value)}\n              placeholder=\"Add any additional notes about this location update\"\n              rows={3}\n              disabled={isLoading}\n            />\n          </div>\n\n          {/* Timestamp Info */}\n          <div className=\"flex items-center gap-2 text-sm text-muted-foreground\">\n            <Clock className=\"h-4 w-4\" />\n            <span>Update will be recorded at: {new Date().toLocaleString()}</span>\n          </div>\n\n          {success && (\n            <div className=\"text-sm text-green-600 bg-green-50 p-3 rounded-md\">\n              {success}\n            </div>\n          )}\n\n          {error && (\n            <div className=\"text-sm text-red-600 bg-red-50 p-3 rounded-md\">\n              <AlertTriangle className=\"h-4 w-4 inline mr-2\" />\n              {error}\n            </div>\n          )}\n\n          <div className=\"flex justify-end gap-2\">\n            {onCancel && (\n              <Button\n                type=\"button\"\n                variant=\"outline\"\n                onClick={onCancel}\n                disabled={isLoading}\n              >\n                Cancel\n              </Button>\n            )}\n            <Button\n              type=\"submit\"\n              disabled={isLoading || !formData.location.trim()}\n              className=\"bg-g1-primary hover:bg-g1-primary/90\"\n            >\n              {isLoading ? (\n                <>\n                  <Loader2 className=\"mr-2 h-4 w-4 animate-spin\" />\n                  Updating...\n                </>\n              ) : (\n                <>\n                  <Save className=\"mr-2 h-4 w-4\" />\n                  Update Location\n                </>\n              )}\n            </Button>\n          </div>\n        </form>\n      </CardContent>\n    </Card>\n  )\n}"
+'use client'
+
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { 
+  MapPin, 
+  Save, 
+  X, 
+  Loader2, 
+  Navigation, 
+  Clock, 
+  AlertTriangle
+} from 'lucide-react'
+import { SKRWithRelations } from '@/types'
+import { trackingUtils } from '@/lib/tracking-utils'
+import { LocationUpdateData } from '@/lib/validations/tracking'
+
+interface LocationUpdateFormProps {
+  skr: SKRWithRelations
+  onUpdate?: () => void
+  onCancel?: () => void
+}
+
+export function LocationUpdateForm({ skr, onUpdate, onCancel }: LocationUpdateFormProps) {
+  const [formData, setFormData] = useState<LocationUpdateData>({
+    skr_id: skr.id,
+    location: '',
+    latitude: undefined,
+    longitude: undefined,
+    notes: ''
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [useCurrentLocation, setUseCurrentLocation] = useState(false)
+
+  const handleLocationSuggestion = (location: string) => {
+    setFormData(prev => ({ ...prev, location }))
+  }
+
+  const getCurrentLocation = () => {
+    setUseCurrentLocation(true)
+    
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by this browser')
+      setUseCurrentLocation(false)
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setFormData(prev => ({
+          ...prev,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        }))
+        setUseCurrentLocation(false)
+      },
+      (error) => {
+        setError(`Failed to get location: ${error.message}`)
+        setUseCurrentLocation(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    )
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/skrs/${skr.id}/tracking`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update location')
+      }
+
+      setSuccess('Location updated successfully!')
+      
+      // Reset form
+      setFormData({
+        skr_id: skr.id,
+        location: '',
+        latitude: undefined,
+        longitude: undefined,
+        notes: ''
+      })
+      
+      if (onUpdate) {
+        setTimeout(() => onUpdate(), 1000)
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const updateFormData = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Update Location
+            </CardTitle>
+            <CardDescription>
+              Record a new location for SKR {skr.skr_number}
+            </CardDescription>
+          </div>
+          {onCancel && (
+            <Button variant="ghost" size="icon" onClick={onCancel}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* SKR Information */}
+          <div className="p-4 bg-muted rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium">SKR Details</h4>
+              <Badge className={`bg-${skr.status === 'in_transit' ? 'orange' : 'blue'}-100 text-${skr.status === 'in_transit' ? 'orange' : 'blue'}-800`}>
+                {skr.status.replace('_', ' ').toUpperCase()}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Client:</span>
+                <span className="ml-2 font-medium">{skr.client?.name}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Asset:</span>
+                <span className="ml-2 font-medium">{skr.asset?.asset_name}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Location Input */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="location">Location *</Label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => updateFormData('location', e.target.value)}
+                placeholder="Enter current location"
+                required
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Location Suggestions */}
+            <div className="space-y-2">
+              <Label>Quick Locations</Label>
+              <div className="flex flex-wrap gap-2">
+                {trackingUtils.getLocationSuggestions().slice(0, 8).map((location) => (
+                  <Button
+                    key={location}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleLocationSuggestion(location)}
+                    disabled={isLoading}
+                  >
+                    {location}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Coordinates */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label>Coordinates (Optional)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={getCurrentLocation}
+                disabled={isLoading || useCurrentLocation}
+              >
+                {useCurrentLocation ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Getting Location...
+                  </>
+                ) : (
+                  <>
+                    <Navigation className="mr-2 h-4 w-4" />
+                    Use Current Location
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="latitude">Latitude</Label>
+                <Input
+                  id="latitude"
+                  type="number"
+                  step="any"
+                  value={formData.latitude || ''}
+                  onChange={(e) => updateFormData('latitude', e.target.value ? parseFloat(e.target.value) : undefined)}
+                  placeholder="e.g., 51.5074"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="longitude">Longitude</Label>
+                <Input
+                  id="longitude"
+                  type="number"
+                  step="any"
+                  value={formData.longitude || ''}
+                  onChange={(e) => updateFormData('longitude', e.target.value ? parseFloat(e.target.value) : undefined)}
+                  placeholder="e.g., -0.1278"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+            
+            {formData.latitude && formData.longitude && (
+              <div className="text-sm text-muted-foreground">
+                Coordinates: {trackingUtils.formatCoordinates(formData.latitude, formData.longitude)}
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              value={formData.notes}
+              onChange={(e) => updateFormData('notes', e.target.value)}
+              placeholder="Add any additional notes about this location update"
+              rows={3}
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* Timestamp Info */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="h-4 w-4" />
+            <span>Update will be recorded at: {new Date().toLocaleString()}</span>
+          </div>
+
+          {success && (
+            <div className="text-sm text-green-600 bg-green-50 p-3 rounded-md">
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
+              <AlertTriangle className="h-4 w-4 inline mr-2" />
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            {onCancel && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+            )}
+            <Button
+              type="submit"
+              disabled={isLoading || !formData.location.trim()}
+              className="bg-g1-primary hover:bg-g1-primary/90"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Update Location
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
