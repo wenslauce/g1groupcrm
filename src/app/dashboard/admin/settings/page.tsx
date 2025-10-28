@@ -1,10 +1,10 @@
 import { ProtectedRoute } from '@/components/auth/protected-route'
-import { UserManagement } from '@/components/admin/user-management'
+import { SystemSettings } from '@/components/admin'
 
-export default function UsersPage() {
+export default function SettingsPage() {
   return (
     <ProtectedRoute requiredRoles={['admin']}>
-      <UserManagement />
+      <SystemSettings />
     </ProtectedRoute>
   )
 }

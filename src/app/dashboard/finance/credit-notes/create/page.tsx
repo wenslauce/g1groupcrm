@@ -8,7 +8,7 @@ export default function CreateCreditNotePage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Create Credit Note</h1>
           <p className="text-muted-foreground">
-            Issue a credit note for refunds or adjustments
+            Issue a credit note for an invoice adjustment or refund
           </p>
         </div>
 

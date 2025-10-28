@@ -1,5 +1,5 @@
 import { ProtectedRoute } from '@/components/auth/protected-route'
-import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard'
+import { AnalyticsDashboard } from '@/components/analytics'
 
 export default function AnalyticsPage() {
   return (

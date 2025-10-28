@@ -1,5 +1,5 @@
 import { ProtectedRoute } from '@/components/auth/protected-route'
-import { ReportsDashboard } from '@/components/reports/reports-dashboard'
+import { ReportsDashboard } from '@/components/reports'
 
 export default function ReportsPage() {
   return (

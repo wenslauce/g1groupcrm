@@ -1,5 +1,5 @@
 import { ProtectedRoute } from '@/components/auth/protected-route'
-import { MonitoringDashboard } from '@/components/monitoring/monitoring-dashboard'
+import { MonitoringDashboard } from '@/components/monitoring'
 
 export default function MonitoringPage() {
   return (
