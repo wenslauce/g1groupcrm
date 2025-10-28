@@ -1,1 +1,155 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\nimport { authServer } from '@/lib/auth'\nimport { trackingUpdateSchema } from '@/lib/validations/tracking'\nimport { trackingUtils } from '@/lib/tracking-utils'\n\nexport async function GET(\n  request: NextRequest,\n  { params }: { params: { id: string } }\n) {\n  try {\n    // Require permission to view tracking data\n    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])\n    \n    const supabase = createClient()\n    \n    const { data, error } = await supabase\n      .from('tracking')\n      .select(`\n        *,\n        skr:skrs(\n          id,\n          skr_number,\n          status,\n          client:clients(id, name),\n          asset:assets(id, asset_name, asset_type)\n        ),\n        recorded_by_user:user_profiles!recorded_by(id, name)\n      `)\n      .eq('id', params.id)\n      .single()\n    \n    if (error) {\n      if (error.code === 'PGRST116') {\n        return NextResponse.json({ error: 'Tracking record not found' }, { status: 404 })\n      }\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ data })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function PUT(\n  request: NextRequest,\n  { params }: { params: { id: string } }\n) {\n  try {\n    // Require permission to update tracking records\n    const user = await authServer.requireRole(['admin', 'finance', 'operations'])\n    \n    const body = await request.json()\n    \n    // Validate request body\n    const validatedData = trackingUpdateSchema.parse(body)\n    \n    const supabase = createClient()\n    \n    // Get current tracking record\n    const { data: currentRecord, error: fetchError } = await supabase\n      .from('tracking')\n      .select('*')\n      .eq('id', params.id)\n      .single()\n    \n    if (fetchError || !currentRecord) {\n      return NextResponse.json({ error: 'Tracking record not found' }, { status: 404 })\n    }\n    \n    // Validate coordinates if provided\n    if (validatedData.latitude !== undefined && validatedData.longitude !== undefined) {\n      if (!trackingUtils.validateCoordinates(validatedData.latitude, validatedData.longitude)) {\n        return NextResponse.json({ error: 'Invalid coordinates provided' }, { status: 400 })\n      }\n    }\n    \n    const { data, error } = await supabase\n      .from('tracking')\n      .update({\n        ...validatedData,\n        updated_at: new Date().toISOString()\n      })\n      .eq('id', params.id)\n      .select(`\n        *,\n        skr:skrs(\n          id,\n          skr_number,\n          status,\n          client:clients(id, name),\n          asset:assets(id, asset_name)\n        ),\n        recorded_by_user:user_profiles!recorded_by(id, name)\n      `)\n      .single()\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ data })\n  } catch (error) {\n    if (error instanceof Error && error.name === 'ZodError') {\n      return NextResponse.json(\n        { error: 'Validation error', details: (error as any).errors },\n        { status: 400 }\n      )\n    }\n    \n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function DELETE(\n  request: NextRequest,\n  { params }: { params: { id: string } }\n) {\n  try {\n    // Require admin permission to delete tracking records\n    const user = await authServer.requireRole(['admin'])\n    \n    const supabase = createClient()\n    \n    const { error } = await supabase\n      .from('tracking')\n      .delete()\n      .eq('id', params.id)\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ message: 'Tracking record deleted successfully' })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { authServer } from '@/lib/auth-server'
+import { z } from 'zod'
+
+const trackingUpdateSchema = z.object({
+  location: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  notes: z.string().optional()
+})
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Require permission to view tracking data
+    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])
+    
+    const supabase = createClient()
+    
+    const { data, error } = await supabase
+      .from('tracking')
+      .select(`
+        *,
+        skr:skrs(
+          id,
+          skr_number,
+          status,
+          client:clients(id, name),
+          asset:assets(id, asset_name, asset_type)
+        ),
+        recorded_by_user:user_profiles!recorded_by(id, full_name)
+      `)
+      .eq('id', params.id)
+      .single()
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Tracking record not found' }, { status: 404 })
+      }
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({ data })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Require permission to update tracking records
+    const user = await authServer.requireRole(['admin', 'finance', 'operations'])
+    
+    const body = await request.json()
+    
+    // Validate request body
+    const validatedData = trackingUpdateSchema.parse(body)
+    
+    const supabase = createClient()
+    
+    // Get current tracking record
+    const { data: currentRecord, error: fetchError } = await supabase
+      .from('tracking')
+      .select('*')
+      .eq('id', params.id)
+      .single()
+    
+    if (fetchError || !currentRecord) {
+      return NextResponse.json({ error: 'Tracking record not found' }, { status: 404 })
+    }
+    
+    // Validate coordinates if provided
+    if (validatedData.latitude !== undefined && validatedData.longitude !== undefined) {
+      if (validatedData.latitude < -90 || validatedData.latitude > 90 ||
+          validatedData.longitude < -180 || validatedData.longitude > 180) {
+        return NextResponse.json({ error: 'Invalid coordinates provided' }, { status: 400 })
+      }
+    }
+    
+    const { data, error } = await supabase
+      .from('tracking')
+      .update({
+        ...validatedData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', params.id)
+      .select(`
+        *,
+        skr:skrs(
+          id,
+          skr_number,
+          status,
+          client:clients(id, name),
+          asset:assets(id, asset_name)
+        ),
+        recorded_by_user:user_profiles!recorded_by(id, full_name)
+      `)
+      .single()
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({ data })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Require admin permission to delete tracking records
+    const user = await authServer.requireRole(['admin'])
+    
+    const supabase = createClient()
+    
+    const { error } = await supabase
+      .from('tracking')
+      .delete()
+      .eq('id', params.id)
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({ message: 'Tracking record deleted successfully' })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,1 +1,182 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\nimport { authServer } from '@/lib/auth-server'\nimport { receiptFormSchema, financialFiltersSchema } from '@/lib/validations/financial'\nimport { financialUtils } from '@/lib/financial-utils'\n\nexport async function GET(request: NextRequest) {\n  try {\n    // Require permission to view receipts\n    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])\n    \n    const supabase = createClient()\n    const { searchParams } = new URL(request.url)\n    \n    // Parse and validate filters\n    const filters = financialFiltersSchema.parse({\n      search: searchParams.get('search') || undefined,\n      client_id: searchParams.get('client_id') || undefined,\n      date_from: searchParams.get('date_from') || undefined,\n      date_to: searchParams.get('date_to') || undefined,\n      amount_min: searchParams.get('amount_min') ? parseFloat(searchParams.get('amount_min')!) : undefined,\n      amount_max: searchParams.get('amount_max') ? parseFloat(searchParams.get('amount_max')!) : undefined,\n      currency: searchParams.get('currency') || undefined,\n      page: parseInt(searchParams.get('page') || '1'),\n      limit: parseInt(searchParams.get('limit') || '10')\n    })\n    \n    const offset = (filters.page - 1) * filters.limit\n    \n    let query = supabase\n      .from('receipts')\n      .select(`\n        *,\n        client:clients(*),\n        invoice:invoices(\n          id,\n          invoice_number,\n          amount,\n          status,\n          skr:skrs(id, skr_number)\n        )\n      `, { count: 'exact' })\n      .order('created_at', { ascending: false })\n    \n    // Apply filters\n    if (filters.search) {\n      query = query.or(`receipt_number.ilike.%${filters.search}%,payment_reference.ilike.%${filters.search}%`)\n    }\n    \n    if (filters.client_id) {\n      query = query.eq('client_id', filters.client_id)\n    }\n    \n    if (filters.date_from) {\n      query = query.gte('payment_date', filters.date_from)\n    }\n    \n    if (filters.date_to) {\n      query = query.lte('payment_date', filters.date_to)\n    }\n    \n    if (filters.amount_min) {\n      query = query.gte('amount', filters.amount_min)\n    }\n    \n    if (filters.amount_max) {\n      query = query.lte('amount', filters.amount_max)\n    }\n    \n    if (filters.currency) {\n      query = query.eq('currency', filters.currency)\n    }\n    \n    const { data, error, count } = await query\n      .range(offset, offset + filters.limit - 1)\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({\n      data,\n      count,\n      page: filters.page,\n      limit: filters.limit,\n      total_pages: Math.ceil((count || 0) / filters.limit)\n    })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function POST(request: NextRequest) {\n  try {\n    // Require permission to create receipts\n    const user = await authServer.requireRole(['admin', 'finance'])\n    \n    const body = await request.json()\n    \n    // Validate request body\n    const validatedData = receiptFormSchema.parse(body)\n    \n    const supabase = createClient()\n    \n    // Generate receipt number\n    const receiptNumber = financialUtils.generateReceiptNumber()\n    \n    // Verify invoice exists and is accessible\n    const { data: invoice, error: invoiceError } = await supabase\n      .from('invoices')\n      .select('id, invoice_number, amount, currency, status, client_id')\n      .eq('id', validatedData.invoice_id)\n      .single()\n    \n    if (invoiceError || !invoice) {\n      return NextResponse.json({ error: 'Invoice not found or not accessible' }, { status: 400 })\n    }\n    \n    // Verify client matches\n    if (invoice.client_id !== validatedData.client_id) {\n      return NextResponse.json({ error: 'Client does not match invoice client' }, { status: 400 })\n    }\n    \n    // Check if invoice can receive payments\n    if (['paid', 'cancelled'].includes(invoice.status)) {\n      return NextResponse.json({ error: `Cannot add payment to ${invoice.status} invoice` }, { status: 400 })\n    }\n    \n    // Verify currency matches\n    if (invoice.currency !== validatedData.currency) {\n      return NextResponse.json({ error: 'Currency must match invoice currency' }, { status: 400 })\n    }\n    \n    // Check existing payments\n    const { data: existingReceipts, error: receiptsError } = await supabase\n      .from('receipts')\n      .select('amount')\n      .eq('invoice_id', validatedData.invoice_id)\n    \n    if (receiptsError) {\n      return NextResponse.json({ error: receiptsError.message }, { status: 400 })\n    }\n    \n    const totalPaid = existingReceipts.reduce((sum, receipt) => sum + receipt.amount, 0)\n    const remainingAmount = invoice.amount - totalPaid\n    \n    if (validatedData.amount > remainingAmount) {\n      return NextResponse.json(\n        { error: `Payment amount exceeds remaining balance of ${remainingAmount.toFixed(2)}` },\n        { status: 400 }\n      )\n    }\n    \n    // Set payment date if not provided\n    const paymentDate = validatedData.payment_date || new Date().toISOString()\n    \n    // Create receipt\n    const { data, error } = await supabase\n      .from('receipts')\n      .insert({\n        receipt_number: receiptNumber,\n        invoice_id: validatedData.invoice_id,\n        client_id: validatedData.client_id,\n        amount: validatedData.amount,\n        currency: validatedData.currency,\n        payment_method: validatedData.payment_method,\n        payment_reference: validatedData.payment_reference,\n        payment_date: paymentDate,\n        notes: validatedData.notes,\n        metadata: validatedData.metadata || {}\n      })\n      .select(`\n        *,\n        client:clients(*),\n        invoice:invoices(\n          id,\n          invoice_number,\n          amount,\n          skr:skrs(id, skr_number)\n        )\n      `)\n      .single()\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    // Update invoice status if fully paid\n    const newTotalPaid = totalPaid + validatedData.amount\n    if (newTotalPaid >= invoice.amount) {\n      await supabase\n        .from('invoices')\n        .update({ status: 'paid' })\n        .eq('id', validatedData.invoice_id)\n    }\n    \n    return NextResponse.json({ data }, { status: 201 })\n  } catch (error) {\n    if (error instanceof Error && error.name === 'ZodError') {\n      return NextResponse.json(\n        { error: 'Validation error', details: (error as any).errors },\n        { status: 400 }\n      )\n    }\n    \n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { authServer } from '@/lib/auth-server'
+import { z } from 'zod'
+
+const receiptSchema = z.object({
+  invoice_id: z.string().uuid(),
+  amount: z.number().positive(),
+  payment_method: z.string(),
+  payment_reference: z.string().optional(),
+  notes: z.string().optional()
+})
+
+export async function GET(request: NextRequest) {
+  try {
+    // Require permission to view receipts
+    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])
+    
+    const supabase = createClient()
+    const { searchParams } = new URL(request.url)
+    
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '10')
+    const search = searchParams.get('search') || ''
+    const invoiceId = searchParams.get('invoice_id') || ''
+    
+    const offset = (page - 1) * limit
+    
+    let query = supabase
+      .from('receipts')
+      .select(`
+        *,
+        invoices(
+          id,
+          invoice_number,
+          amount,
+          status,
+          clients(id, name, email),
+          skrs(id, skr_number)
+        )
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+    
+    // Apply filters
+    if (search) {
+      query = query.or(`receipt_number.ilike.%${search}%,payment_reference.ilike.%${search}%`)
+    }
+    
+    if (invoiceId) {
+      query = query.eq('invoice_id', invoiceId)
+    }
+    
+    const { data, error, count } = await query
+      .range(offset, offset + limit - 1)
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({
+      data,
+      count,
+      page,
+      limit,
+      total_pages: Math.ceil((count || 0) / limit)
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Require permission to create receipts
+    const user = await authServer.requireRole(['admin', 'finance'])
+    
+    const body = await request.json()
+    
+    // Validate request body
+    const validatedData = receiptSchema.parse(body)
+    
+    const supabase = createClient()
+    
+    // Generate receipt number
+    const receiptNumber = await generateReceiptNumber(supabase)
+    
+    // Verify invoice exists and is accessible
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, amount, currency, status')
+      .eq('id', validatedData.invoice_id)
+      .single()
+    
+    if (invoiceError || !invoice) {
+      return NextResponse.json({ error: 'Invoice not found or not accessible' }, { status: 404 })
+    }
+    
+    // Check if invoice can receive payments
+    if (['paid', 'cancelled'].includes(invoice.status)) {
+      return NextResponse.json({ error: `Cannot add payment to ${invoice.status} invoice` }, { status: 400 })
+    }
+    
+    // Check existing payments
+    const { data: existingReceipts } = await supabase
+      .from('receipts')
+      .select('amount')
+      .eq('invoice_id', validatedData.invoice_id)
+    
+    const totalPaid = (existingReceipts || []).reduce((sum, receipt) => sum + parseFloat(receipt.amount.toString()), 0)
+    const remainingAmount = parseFloat(invoice.amount.toString()) - totalPaid
+    
+    if (validatedData.amount > remainingAmount) {
+      return NextResponse.json(
+        { error: `Payment amount exceeds remaining balance of ${remainingAmount.toFixed(2)}` },
+        { status: 400 }
+      )
+    }
+    
+    // Create receipt
+    const { data, error } = await supabase
+      .from('receipts')
+      .insert({
+        receipt_number: receiptNumber,
+        invoice_id: validatedData.invoice_id,
+        amount: validatedData.amount,
+        payment_method: validatedData.payment_method,
+        payment_reference: validatedData.payment_reference,
+        issue_date: new Date().toISOString()
+      })
+      .select(`
+        *,
+        invoices(
+          id,
+          invoice_number,
+          amount,
+          skrs(id, skr_number)
+        )
+      `)
+      .single()
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    // Update invoice status if fully paid
+    const newTotalPaid = totalPaid + validatedData.amount
+    if (newTotalPaid >= parseFloat(invoice.amount.toString())) {
+      await supabase
+        .from('invoices')
+        .update({ status: 'paid' })
+        .eq('id', validatedData.invoice_id)
+    }
+    
+    return NextResponse.json({ data }, { status: 201 })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+async function generateReceiptNumber(supabase: any): Promise<string> {
+  const year = new Date().getFullYear()
+  const { count } = await supabase
+    .from('receipts')
+    .select('*', { count: 'exact', head: true })
+    .like('receipt_number', `REC-${year}-%`)
+  
+  const nextNumber = (count || 0) + 1
+  return `REC-${year}-${nextNumber.toString().padStart(5, '0')}`
+}

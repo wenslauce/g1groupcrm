@@ -1,1 +1,324 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { useRouter } from 'next/navigation'\nimport { ProtectedRoute } from '@/components/auth/protected-route'\nimport { SKRStatusManager } from '@/components/skrs/skr-status-manager'\nimport { Button } from '@/components/ui/button'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Badge } from '@/components/ui/badge'\nimport { Separator } from '@/components/ui/separator'\nimport { \n  ArrowLeft, \n  FileText, \n  User, \n  Package, \n  Calendar,\n  Hash,\n  Download,\n  Edit,\n  Loader2\n} from 'lucide-react'\nimport { SKRWithRelations } from '@/types'\nimport { skrUtils } from '@/lib/skr-utils'\nimport { clientUtils } from '@/lib/client-utils'\nimport { formatCurrency, formatDateTime } from '@/lib/utils'\n\ninterface SKRDetailsPageProps {\n  params: { id: string }\n}\n\nexport default function SKRDetailsPage({ params }: SKRDetailsPageProps) {\n  const [skr, setSKR] = useState<SKRWithRelations | null>(null)\n  const [loading, setLoading] = useState(true)\n  const [error, setError] = useState('')\n  const router = useRouter()\n\n  useEffect(() => {\n    fetchSKR()\n  }, [params.id])\n\n  const fetchSKR = async () => {\n    setLoading(true)\n    try {\n      const response = await fetch(`/api/skrs/${params.id}`)\n      const result = await response.json()\n      \n      if (!response.ok) {\n        throw new Error(result.error || 'Failed to fetch SKR')\n      }\n      \n      setSKR(result.data)\n    } catch (error) {\n      setError(error instanceof Error ? error.message : 'An error occurred')\n    } finally {\n      setLoading(false)\n    }\n  }\n\n  const handleUpdate = () => {\n    fetchSKR() // Refresh data after updates\n  }\n\n  if (loading) {\n    return (\n      <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>\n        <div className=\"flex items-center justify-center min-h-[400px]\">\n          <Loader2 className=\"h-8 w-8 animate-spin\" />\n        </div>\n      </ProtectedRoute>\n    )\n  }\n\n  if (error || !skr) {\n    return (\n      <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>\n        <div className=\"space-y-6\">\n          <div className=\"flex items-center gap-4\">\n            <Button variant=\"ghost\" size=\"icon\" onClick={() => router.back()}>\n              <ArrowLeft className=\"h-4 w-4\" />\n            </Button>\n            <div>\n              <h1 className=\"text-3xl font-bold tracking-tight\">SKR Not Found</h1>\n              <p className=\"text-muted-foreground\">{error || 'The requested SKR could not be found'}</p>\n            </div>\n          </div>\n        </div>\n      </ProtectedRoute>\n    )\n  }\n\n  return (\n    <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>\n      <div className=\"space-y-6\">\n        {/* Header */}\n        <div className=\"flex items-center justify-between\">\n          <div className=\"flex items-center gap-4\">\n            <Button variant=\"ghost\" size=\"icon\" onClick={() => router.back()}>\n              <ArrowLeft className=\"h-4 w-4\" />\n            </Button>\n            <div>\n              <h1 className=\"text-3xl font-bold tracking-tight\">{skr.skr_number}</h1>\n              <p className=\"text-muted-foreground\">Secure Keeper Receipt Details</p>\n            </div>\n          </div>\n          <div className=\"flex items-center gap-2\">\n            <Badge className={skrUtils.getStatusColor(skr.status)}>\n              {skrUtils.getStatusDisplayName(skr.status)}\n            </Badge>\n            <Button variant=\"outline\" size=\"sm\">\n              <Edit className=\"mr-2 h-4 w-4\" />\n              Edit\n            </Button>\n            {skr.pdf_url && (\n              <Button variant=\"outline\" size=\"sm\">\n                <Download className=\"mr-2 h-4 w-4\" />\n                Download PDF\n              </Button>\n            )}\n          </div>\n        </div>\n\n        <div className=\"grid grid-cols-1 lg:grid-cols-3 gap-6\">\n          {/* Main Content */}\n          <div className=\"lg:col-span-2 space-y-6\">\n            {/* SKR Information */}\n            <Card>\n              <CardHeader>\n                <CardTitle className=\"flex items-center gap-2\">\n                  <FileText className=\"h-5 w-5\" />\n                  SKR Information\n                </CardTitle>\n              </CardHeader>\n              <CardContent className=\"space-y-4\">\n                <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n                  <div className=\"space-y-2\">\n                    <div className=\"text-sm font-medium text-muted-foreground\">SKR Number</div>\n                    <div className=\"text-lg font-mono font-bold\">{skr.skr_number}</div>\n                  </div>\n                  <div className=\"space-y-2\">\n                    <div className=\"text-sm font-medium text-muted-foreground\">Status</div>\n                    <Badge className={skrUtils.getStatusColor(skr.status)}>\n                      {skrUtils.getStatusDisplayName(skr.status)}\n                    </Badge>\n                  </div>\n                  <div className=\"space-y-2\">\n                    <div className=\"text-sm font-medium text-muted-foreground\">Created</div>\n                    <div className=\"flex items-center gap-2\">\n                      <Calendar className=\"h-4 w-4\" />\n                      {formatDateTime(skr.created_at)}\n                    </div>\n                  </div>\n                  {skr.issue_date && (\n                    <div className=\"space-y-2\">\n                      <div className=\"text-sm font-medium text-muted-foreground\">Issued</div>\n                      <div className=\"flex items-center gap-2\">\n                        <Calendar className=\"h-4 w-4\" />\n                        {formatDateTime(skr.issue_date)}\n                      </div>\n                    </div>\n                  )}\n                </div>\n\n                {skr.hash && (\n                  <div className=\"space-y-2\">\n                    <div className=\"text-sm font-medium text-muted-foreground\">Digital Hash</div>\n                    <div className=\"flex items-center gap-2 p-3 bg-muted rounded-lg\">\n                      <Hash className=\"h-4 w-4\" />\n                      <code className=\"text-xs font-mono break-all\">{skr.hash}</code>\n                    </div>\n                  </div>\n                )}\n\n                {skr.remarks && (\n                  <div className=\"space-y-2\">\n                    <div className=\"text-sm font-medium text-muted-foreground\">Remarks</div>\n                    <div className=\"p-3 bg-muted rounded-lg text-sm\">\n                      {skr.remarks}\n                    </div>\n                  </div>\n                )}\n              </CardContent>\n            </Card>\n\n            {/* Client Information */}\n            {skr.client && (\n              <Card>\n                <CardHeader>\n                  <CardTitle className=\"flex items-center gap-2\">\n                    <User className=\"h-5 w-5\" />\n                    Client Information\n                  </CardTitle>\n                </CardHeader>\n                <CardContent className=\"space-y-4\">\n                  <div className=\"flex items-start justify-between\">\n                    <div className=\"space-y-2\">\n                      <div className=\"text-lg font-semibold\">{skr.client.name}</div>\n                      <div className=\"text-sm text-muted-foreground\">{skr.client.email}</div>\n                    </div>\n                    <div className=\"flex gap-2\">\n                      <Badge className={clientUtils.getTypeColor(skr.client.type)} size=\"sm\">\n                        {clientUtils.getTypeDisplayName(skr.client.type)}\n                      </Badge>\n                      <Badge className={clientUtils.getComplianceStatusColor(skr.client.compliance_status)} size=\"sm\">\n                        {clientUtils.getComplianceStatusDisplayName(skr.client.compliance_status)}\n                      </Badge>\n                    </div>\n                  </div>\n                  \n                  <Separator />\n                  \n                  <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4 text-sm\">\n                    <div>\n                      <span className=\"text-muted-foreground\">Country:</span>\n                      <span className=\"ml-2\">{skr.client.country}</span>\n                    </div>\n                    <div>\n                      <span className=\"text-muted-foreground\">Risk Level:</span>\n                      <Badge className={clientUtils.getRiskLevelColor(skr.client.risk_level)} size=\"sm\">\n                        {clientUtils.getRiskLevelDisplayName(skr.client.risk_level)}\n                      </Badge>\n                    </div>\n                    {skr.client.phone && (\n                      <div>\n                        <span className=\"text-muted-foreground\">Phone:</span>\n                        <span className=\"ml-2\">{skr.client.phone}</span>\n                      </div>\n                    )}\n                    {skr.client.address && (\n                      <div>\n                        <span className=\"text-muted-foreground\">Address:</span>\n                        <span className=\"ml-2\">{skr.client.address}</span>\n                      </div>\n                    )}\n                  </div>\n                </CardContent>\n              </Card>\n            )}\n\n            {/* Asset Information */}\n            {skr.asset && (\n              <Card>\n                <CardHeader>\n                  <CardTitle className=\"flex items-center gap-2\">\n                    <Package className=\"h-5 w-5\" />\n                    Asset Information\n                  </CardTitle>\n                </CardHeader>\n                <CardContent className=\"space-y-4\">\n                  <div className=\"flex items-start justify-between\">\n                    <div className=\"space-y-2\">\n                      <div className=\"text-lg font-semibold\">{skr.asset.asset_name}</div>\n                      <div className=\"text-sm text-muted-foreground\">{skr.asset.asset_type}</div>\n                    </div>\n                    <div className=\"text-right\">\n                      <div className=\"text-lg font-bold\">\n                        {formatCurrency(skr.asset.declared_value, skr.asset.currency)}\n                      </div>\n                      <div className=\"text-sm text-muted-foreground\">Declared Value</div>\n                    </div>\n                  </div>\n                  \n                  <Separator />\n                  \n                  <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4 text-sm\">\n                    <div>\n                      <span className=\"text-muted-foreground\">Origin:</span>\n                      <span className=\"ml-2\">{skr.asset.origin}</span>\n                    </div>\n                    <div>\n                      <span className=\"text-muted-foreground\">Destination:</span>\n                      <span className=\"ml-2\">{skr.asset.destination || 'Not specified'}</span>\n                    </div>\n                    <div>\n                      <span className=\"text-muted-foreground\">Currency:</span>\n                      <span className=\"ml-2\">{skr.asset.currency}</span>\n                    </div>\n                    <div>\n                      <span className=\"text-muted-foreground\">Created:</span>\n                      <span className=\"ml-2\">{formatDateTime(skr.asset.created_at)}</span>\n                    </div>\n                  </div>\n\n                  {skr.asset.specifications && Object.keys(skr.asset.specifications).length > 0 && (\n                    <div className=\"space-y-2\">\n                      <div className=\"text-sm font-medium text-muted-foreground\">Specifications</div>\n                      <div className=\"p-3 bg-muted rounded-lg\">\n                        <pre className=\"text-xs whitespace-pre-wrap\">\n                          {JSON.stringify(skr.asset.specifications, null, 2)}\n                        </pre>\n                      </div>\n                    </div>\n                  )}\n                </CardContent>\n              </Card>\n            )}\n          </div>\n\n          {/* Sidebar */}\n          <div className=\"space-y-6\">\n            {/* Status Management */}\n            <SKRStatusManager skr={skr} onUpdate={handleUpdate} />\n\n            {/* Quick Actions */}\n            <Card>\n              <CardHeader>\n                <CardTitle>Quick Actions</CardTitle>\n              </CardHeader>\n              <CardContent className=\"space-y-2\">\n                <Button variant=\"outline\" className=\"w-full justify-start\">\n                  <FileText className=\"mr-2 h-4 w-4\" />\n                  View History\n                </Button>\n                <Button variant=\"outline\" className=\"w-full justify-start\">\n                  <Package className=\"mr-2 h-4 w-4\" />\n                  Track Asset\n                </Button>\n                {skr.status === 'issued' && (\n                  <Button variant=\"outline\" className=\"w-full justify-start\">\n                    <Download className=\"mr-2 h-4 w-4\" />\n                    Generate PDF\n                  </Button>\n                )}\n              </CardContent>\n            </Card>\n          </div>\n        </div>\n      </div>\n    </ProtectedRoute>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { ProtectedRoute } from '@/components/auth/protected-route'
+import { SKRStatusManager } from '@/components/skrs/skr-status-manager'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { 
+  ArrowLeft, 
+  FileText, 
+  User, 
+  Package, 
+  Calendar,
+  Hash,
+  Download,
+  Edit,
+  Loader2
+} from 'lucide-react'
+import { SKRWithRelations } from '@/types'
+import { skrUtils } from '@/lib/skr-utils'
+import { clientUtils } from '@/lib/client-utils'
+import { formatCurrency, formatDateTime } from '@/lib/utils'
+
+interface SKRDetailsPageProps {
+  params: { id: string }
+}
+
+export default function SKRDetailsPage({ params }: SKRDetailsPageProps) {
+  const [skr, setSKR] = useState<SKRWithRelations | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const router = useRouter()
+
+  useEffect(() => {
+    fetchSKR()
+  }, [params.id])
+
+  const fetchSKR = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/skrs/${params.id}`)
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch SKR')
+      }
+      
+      setSKR(result.data)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdate = () => {
+    fetchSKR() // Refresh data after updates
+  }
+
+  if (loading) {
+    return (
+      <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
+  if (error || !skr) {
+    return (
+      <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">SKR Not Found</h1>
+              <p className="text-muted-foreground">{error || 'The requested SKR could not be found'}</p>
+            </div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
+  return (
+    <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">{skr.skr_number}</h1>
+              <p className="text-muted-foreground">Secure Keeper Receipt Details</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge className={skrUtils.getStatusColor(skr.status)}>
+              {skrUtils.getStatusDisplayName(skr.status)}
+            </Badge>
+            <Button variant="outline" size="sm">
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+            {skr.pdf_url && (
+              <Button variant="outline" size="sm">
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* SKR Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  SKR Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">SKR Number</div>
+                    <div className="text-lg font-mono font-bold">{skr.skr_number}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Status</div>
+                    <Badge className={skrUtils.getStatusColor(skr.status)}>
+                      {skrUtils.getStatusDisplayName(skr.status)}
+                    </Badge>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Created</div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {formatDateTime(skr.created_at)}
+                    </div>
+                  </div>
+                  {skr.issue_date && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-muted-foreground">Issued</div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        {formatDateTime(skr.issue_date)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {skr.hash && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Digital Hash</div>
+                    <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                      <Hash className="h-4 w-4" />
+                      <code className="text-xs font-mono break-all">{skr.hash}</code>
+                    </div>
+                  </div>
+                )}
+
+                {skr.remarks && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Remarks</div>
+                    <div className="p-3 bg-muted rounded-lg text-sm">
+                      {skr.remarks}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Client Information */}
+            {skr.client && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Client Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2">
+                      <div className="text-lg font-semibold">{skr.client.name}</div>
+                      <div className="text-sm text-muted-foreground">{skr.client.email}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Badge className={clientUtils.getTypeColor(skr.client.type)}>
+                        {clientUtils.getTypeDisplayName(skr.client.type)}
+                      </Badge>
+                      <Badge className={clientUtils.getComplianceStatusColor(skr.client.compliance_status)}>
+                        {clientUtils.getComplianceStatusDisplayName(skr.client.compliance_status)}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Country:</span>
+                      <span className="ml-2">{skr.client.country}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Risk Level:</span>
+                      <Badge className={clientUtils.getRiskLevelColor(skr.client.risk_level)}>
+                        {clientUtils.getRiskLevelDisplayName(skr.client.risk_level)}
+                      </Badge>
+                    </div>
+                    {skr.client.phone && (
+                      <div>
+                        <span className="text-muted-foreground">Phone:</span>
+                        <span className="ml-2">{skr.client.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Asset Information */}
+            {skr.asset && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Asset Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2">
+                      <div className="text-lg font-semibold">{skr.asset.asset_name}</div>
+                      <div className="text-sm text-muted-foreground">{skr.asset.asset_type}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold">
+                        {formatCurrency(skr.asset.declared_value, skr.asset.currency)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Declared Value</div>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Origin:</span>
+                      <span className="ml-2">{skr.asset.origin}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Destination:</span>
+                      <span className="ml-2">{skr.asset.destination || 'Not specified'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Currency:</span>
+                      <span className="ml-2">{skr.asset.currency}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Created:</span>
+                      <span className="ml-2">{formatDateTime(skr.asset.created_at)}</span>
+                    </div>
+                  </div>
+
+                  {skr.asset.specifications && Object.keys(skr.asset.specifications).length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-muted-foreground">Specifications</div>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <pre className="text-xs whitespace-pre-wrap">
+                          {JSON.stringify(skr.asset.specifications, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Status Management */}
+            <SKRStatusManager skr={skr} onUpdate={handleUpdate} />
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button variant="outline" className="w-full justify-start">
+                  <FileText className="mr-2 h-4 w-4" />
+                  View History
+                </Button>
+                <Button variant="outline" className="w-full justify-start">
+                  <Package className="mr-2 h-4 w-4" />
+                  Track Asset
+                </Button>
+                {skr.status === 'issued' && (
+                  <Button variant="outline" className="w-full justify-start">
+                    <Download className="mr-2 h-4 w-4" />
+                    Generate PDF
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </ProtectedRoute>
+  )
+}

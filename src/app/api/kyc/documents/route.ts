@@ -1,1 +1,94 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\nimport { authServer } from '@/lib/auth-server'\nimport { kycDocumentSchema, kycFiltersSchema } from '@/lib/validations/kyc'\nimport { kycUtils } from '@/lib/kyc-utils'\n\nexport async function GET(request: NextRequest) {\n  try {\n    // Require permission to view KYC documents\n    const user = await authServer.requireRole(['admin', 'compliance', 'finance', 'operations'])\n    \n    const supabase = createClient()\n    const { searchParams } = new URL(request.url)\n    \n    // Parse and validate filters\n    const filters = kycFiltersSchema.parse({\n      client_id: searchParams.get('client_id') || undefined,\n      document_type: searchParams.get('document_type') || undefined,\n      status: searchParams.get('status') || undefined,\n      date_from: searchParams.get('date_from') || undefined,\n      date_to: searchParams.get('date_to') || undefined,\n      page: parseInt(searchParams.get('page') || '1'),\n      limit: parseInt(searchParams.get('limit') || '10')\n    })\n    \n    const offset = (filters.page - 1) * filters.limit\n    \n    let query = supabase\n      .from('kyc_documents')\n      .select(`\n        *,\n        client:clients(\n          id,\n          name,\n          email,\n          type,\n          country,\n          compliance_status\n        ),\n        reviewed_by_user:user_profiles!reviewed_by(\n          id,\n          name\n        )\n      `, { count: 'exact' })\n      .order('created_at', { ascending: false })\n    \n    // Apply filters\n    if (filters.client_id) {\n      query = query.eq('client_id', filters.client_id)\n    }\n    \n    if (filters.document_type) {\n      query = query.eq('document_type', filters.document_type)\n    }\n    \n    if (filters.status) {\n      query = query.eq('status', filters.status)\n    }\n    \n    if (filters.date_from) {\n      query = query.gte('created_at', filters.date_from)\n    }\n    \n    if (filters.date_to) {\n      query = query.lte('created_at', filters.date_to)\n    }\n    \n    const { data, error, count } = await query\n      .range(offset, offset + filters.limit - 1)\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({\n      data,\n      count,\n      page: filters.page,\n      limit: filters.limit,\n      total_pages: Math.ceil((count || 0) / filters.limit)\n    })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function POST(request: NextRequest) {\n  try {\n    // Require permission to upload KYC documents\n    const user = await authServer.requireRole(['admin', 'compliance', 'finance', 'operations'])\n    \n    const body = await request.json()\n    \n    // Validate request body\n    const validatedData = kycDocumentSchema.parse(body)\n    \n    const supabase = createClient()\n    \n    // Verify client exists and is accessible\n    const { data: client, error: clientError } = await supabase\n      .from('clients')\n      .select('id, name, type')\n      .eq('id', validatedData.client_id)\n      .single()\n    \n    if (clientError || !client) {\n      return NextResponse.json({ error: 'Client not found or not accessible' }, { status: 400 })\n    }\n    \n    // Validate file type and size\n    const allowedTypes = kycUtils.getAllowedFileTypes()\n    if (!kycUtils.validateFileType(validatedData.file_name, allowedTypes)) {\n      return NextResponse.json(\n        { error: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}` },\n        { status: 400 }\n      )\n    }\n    \n    if (!kycUtils.validateFileSize(validatedData.file_size)) {\n      return NextResponse.json(\n        { error: `File size exceeds maximum limit of ${kycUtils.getMaxFileSize()}MB` },\n        { status: 400 }\n      )\n    }\n    \n    // Check for duplicate documents\n    const { data: existingDoc } = await supabase\n      .from('kyc_documents')\n      .select('id')\n      .eq('client_id', validatedData.client_id)\n      .eq('document_type', validatedData.document_type)\n      .eq('status', 'approved')\n      .single()\n    \n    if (existingDoc) {\n      return NextResponse.json(\n        { error: 'An approved document of this type already exists for this client' },\n        { status: 400 }\n      )\n    }\n    \n    // Validate document expiry if provided\n    if (validatedData.expiry_date && !kycUtils.validateDocumentExpiry(validatedData.expiry_date)) {\n      return NextResponse.json(\n        { error: 'Document expires within 3 months. Please provide a valid document.' },\n        { status: 400 }\n      )\n    }\n    \n    // Create KYC document record\n    const { data, error } = await supabase\n      .from('kyc_documents')\n      .insert({\n        client_id: validatedData.client_id,\n        document_type: validatedData.document_type,\n        document_number: validatedData.document_number,\n        issuing_country: validatedData.issuing_country,\n        issue_date: validatedData.issue_date,\n        expiry_date: validatedData.expiry_date,\n        file_name: validatedData.file_name,\n        file_size: validatedData.file_size,\n        file_type: validatedData.file_type,\n        status: 'pending',\n        uploaded_by: user.id,\n        notes: validatedData.notes,\n        metadata: validatedData.metadata || {}\n      })\n      .select(`\n        *,\n        client:clients(\n          id,\n          name,\n          email,\n          type\n        )\n      `)\n      .single()\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ data }, { status: 201 })\n  } catch (error) {\n    if (error instanceof Error && error.name === 'ZodError') {\n      return NextResponse.json(\n        { error: 'Validation error', details: (error as any).errors },\n        { status: 400 }\n      )\n    }\n    \n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { authServer } from '@/lib/auth-server'
+
+export async function GET(request: NextRequest) {
+  try {
+    // Require permission to view KYC documents
+    const user = await authServer.requireRole(['admin', 'compliance', 'finance', 'operations'])
+    
+    const supabase = createClient()
+    const { searchParams } = new URL(request.url)
+    
+    const clientId = searchParams.get('client_id')
+    
+    // Get client's KYC documents from their kyc_documents JSON field
+    let query = supabase
+      .from('clients')
+      .select('id, name, email, kyc_documents, compliance_status')
+    
+    if (clientId) {
+      query = query.eq('id', clientId)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({ data })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Require permission to upload KYC documents
+    const user = await authServer.requireRole(['admin', 'compliance', 'finance', 'operations'])
+    
+    const body = await request.json()
+    const { client_id, document } = body
+    
+    if (!client_id || !document) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+    
+    const supabase = createClient()
+    
+    // Get current client
+    const { data: client, error: clientError } = await supabase
+      .from('clients')
+      .select('id, kyc_documents')
+      .eq('id', client_id)
+      .single()
+    
+    if (clientError || !client) {
+      return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+    }
+    
+    // Add document to kyc_documents array
+    const currentDocs = Array.isArray(client.kyc_documents) ? client.kyc_documents : []
+    const newDoc = {
+      id: crypto.randomUUID(),
+      ...document,
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: user.id,
+      status: 'pending'
+    }
+    
+    const { data, error } = await supabase
+      .from('clients')
+      .update({
+        kyc_documents: [...currentDocs, newDoc]
+      })
+      .eq('id', client_id)
+      .select()
+      .single()
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({ data: newDoc }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,1 +1,147 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\nimport { authServer } from '@/lib/auth'\nimport { kycReviewSchema } from '@/lib/validations/kyc'\nimport { kycUtils } from '@/lib/kyc-utils'\n\nexport async function GET(\n  request: NextRequest,\n  { params }: { params: { id: string } }\n) {\n  try {\n    // Require permission to view KYC documents\n    const user = await authServer.requireRole(['admin', 'compliance', 'finance', 'operations'])\n    \n    const supabase = createClient()\n    \n    const { data, error } = await supabase\n      .from('kyc_documents')\n      .select(`\n        *,\n        client:clients(\n          id,\n          name,\n          email,\n          type,\n          country,\n          compliance_status\n        ),\n        uploaded_by_user:user_profiles!uploaded_by(\n          id,\n          name\n        ),\n        reviewed_by_user:user_profiles!reviewed_by(\n          id,\n          name\n        )\n      `)\n      .eq('id', params.id)\n      .single()\n    \n    if (error) {\n      if (error.code === 'PGRST116') {\n        return NextResponse.json({ error: 'KYC document not found' }, { status: 404 })\n      }\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ data })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function PUT(\n  request: NextRequest,\n  { params }: { params: { id: string } }\n) {\n  try {\n    // Require compliance permission to review KYC documents\n    const user = await authServer.requireRole(['admin', 'compliance'])\n    \n    const body = await request.json()\n    \n    // Validate request body\n    const validatedData = kycReviewSchema.parse({\n      ...body,\n      reviewed_by: user.id\n    })\n    \n    const supabase = createClient()\n    \n    // Get current document to validate status transitions\n    const { data: currentDoc, error: fetchError } = await supabase\n      .from('kyc_documents')\n      .select('*')\n      .eq('id', params.id)\n      .single()\n    \n    if (fetchError || !currentDoc) {\n      return NextResponse.json({ error: 'KYC document not found' }, { status: 404 })\n    }\n    \n    // Validate status transition\n    if (!kycUtils.canTransitionKYCStatus(currentDoc.status, validatedData.status)) {\n      return NextResponse.json(\n        { error: `Cannot transition from ${currentDoc.status} to ${validatedData.status}` },\n        { status: 400 }\n      )\n    }\n    \n    // Update document\n    const { data, error } = await supabase\n      .from('kyc_documents')\n      .update({\n        status: validatedData.status,\n        review_notes: validatedData.review_notes,\n        reviewed_by: validatedData.reviewed_by,\n        reviewed_at: new Date().toISOString(),\n        compliance_flags: validatedData.compliance_flags || [],\n        risk_score: validatedData.risk_score,\n        updated_at: new Date().toISOString()\n      })\n      .eq('id', params.id)\n      .select(`\n        *,\n        client:clients(\n          id,\n          name,\n          email,\n          type\n        ),\n        reviewed_by_user:user_profiles!reviewed_by(\n          id,\n          name\n        )\n      `)\n      .single()\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    // Update client compliance status if all required documents are approved\n    if (validatedData.status === 'approved') {\n      await updateClientComplianceStatus(supabase, currentDoc.client_id)\n    }\n    \n    return NextResponse.json({ data })\n  } catch (error) {\n    if (error instanceof Error && error.name === 'ZodError') {\n      return NextResponse.json(\n        { error: 'Validation error', details: (error as any).errors },\n        { status: 400 }\n      )\n    }\n    \n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function DELETE(\n  request: NextRequest,\n  { params }: { params: { id: string } }\n) {\n  try {\n    // Require admin permission to delete KYC documents\n    const user = await authServer.requireRole(['admin'])\n    \n    const supabase = createClient()\n    \n    // Check if document can be deleted (only pending/rejected documents)\n    const { data: doc, error: fetchError } = await supabase\n      .from('kyc_documents')\n      .select('status, client_id')\n      .eq('id', params.id)\n      .single()\n    \n    if (fetchError || !doc) {\n      return NextResponse.json({ error: 'KYC document not found' }, { status: 404 })\n    }\n    \n    if (doc.status === 'approved') {\n      return NextResponse.json(\n        { error: 'Cannot delete approved KYC documents' },\n        { status: 400 }\n      )\n    }\n    \n    const { error } = await supabase\n      .from('kyc_documents')\n      .delete()\n      .eq('id', params.id)\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ message: 'KYC document deleted successfully' })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\n// Helper function to update client compliance status\nasync function updateClientComplianceStatus(supabase: any, clientId: string) {\n  try {\n    // Get client and their documents\n    const { data: client } = await supabase\n      .from('clients')\n      .select('type')\n      .eq('id', clientId)\n      .single()\n    \n    if (!client) return\n    \n    const { data: documents } = await supabase\n      .from('kyc_documents')\n      .select('document_type, status')\n      .eq('client_id', clientId)\n    \n    if (!documents) return\n    \n    // Check if all required documents are approved\n    const requiredDocs = kycUtils.getRequiredDocumentsForClientType(client.type)\n    const approvedDocs = documents\n      .filter(doc => doc.status === 'approved')\n      .map(doc => doc.document_type)\n    \n    const hasAllRequired = requiredDocs.every(required => approvedDocs.includes(required))\n    \n    // Update client compliance status\n    const newStatus = hasAllRequired ? 'approved' : 'under_review'\n    \n    await supabase\n      .from('clients')\n      .update({ compliance_status: newStatus })\n      .eq('id', clientId)\n  } catch (error) {\n    console.error('Failed to update client compliance status:', error)\n  }\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { authServer } from '@/lib/auth-server'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Require permission to view KYC documents
+    const user = await authServer.requireRole(['admin', 'compliance', 'finance', 'operations'])
+    
+    const supabase = createClient()
+    
+    // Find client with this document
+    const { data: clients, error } = await supabase
+      .from('clients')
+      .select('id, name, email, kyc_documents')
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    // Search for document in client kyc_documents
+    for (const client of clients || []) {
+      const docs = Array.isArray(client.kyc_documents) ? client.kyc_documents : []
+      const doc = docs.find((d: any) => d.id === params.id)
+      
+      if (doc) {
+        return NextResponse.json({
+          data: {
+            ...doc,
+            client: {
+              id: client.id,
+              name: client.name,
+              email: client.email
+            }
+          }
+        })
+      }
+    }
+    
+    return NextResponse.json({ error: 'KYC document not found' }, { status: 404 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Require compliance permission to review KYC documents
+    const user = await authServer.requireRole(['admin', 'compliance'])
+    
+    const body = await request.json()
+    const { status, review_notes } = body
+    
+    const supabase = createClient()
+    
+    // Find and update document
+    const { data: clients } = await supabase
+      .from('clients')
+      .select('id, kyc_documents')
+    
+    for (const client of clients || []) {
+      const docs = Array.isArray(client.kyc_documents) ? client.kyc_documents : []
+      const docIndex = docs.findIndex((d: any) => d.id === params.id)
+      
+      if (docIndex !== -1) {
+        docs[docIndex] = {
+          ...docs[docIndex],
+          status,
+          review_notes,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString()
+        }
+        
+        const { data, error } = await supabase
+          .from('clients')
+          .update({ kyc_documents: docs })
+          .eq('id', client.id)
+          .select()
+          .single()
+        
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        
+        return NextResponse.json({ data: docs[docIndex] })
+      }
+    }
+    
+    return NextResponse.json({ error: 'KYC document not found' }, { status: 404 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Require admin permission to delete KYC documents
+    const user = await authServer.requireRole(['admin'])
+    
+    const supabase = createClient()
+    
+    // Find and delete document
+    const { data: clients } = await supabase
+      .from('clients')
+      .select('id, kyc_documents')
+    
+    for (const client of clients || []) {
+      const docs = Array.isArray(client.kyc_documents) ? client.kyc_documents : []
+      const newDocs = docs.filter((d: any) => d.id !== params.id)
+      
+      if (newDocs.length < docs.length) {
+        const { error } = await supabase
+          .from('clients')
+          .update({ kyc_documents: newDocs })
+          .eq('id', client.id)
+        
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        
+        return NextResponse.json({ message: 'KYC document deleted successfully' })
+      }
+    }
+    
+    return NextResponse.json({ error: 'KYC document not found' }, { status: 404 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,1 +1,87 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { authServer } from '@/lib/auth-server'\n\nexport async function POST(request: NextRequest) {\n  try {\n    // Require authentication for PDF generation\n    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])\n    \n    const body = await request.json()\n    const { type, id, options = {} } = body\n\n    if (!type || !id) {\n      return NextResponse.json(\n        { error: 'Missing required fields: type and id' },\n        { status: 400 }\n      )\n    }\n\n    // Validate document type\n    const validTypes = ['skr', 'invoice', 'receipt', 'credit_note']\n    if (!validTypes.includes(type)) {\n      return NextResponse.json(\n        { error: 'Invalid document type' },\n        { status: 400 }\n      )\n    }\n\n    // Get Supabase Edge Function URL\n    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL\n    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY\n    \n    if (!supabaseUrl || !supabaseAnonKey) {\n      return NextResponse.json(\n        { error: 'Supabase configuration missing' },\n        { status: 500 }\n      )\n    }\n\n    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/generate-pdf`\n\n    // Call the Edge Function\n    const response = await fetch(edgeFunctionUrl, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'Authorization': `Bearer ${supabaseAnonKey}`,\n      },\n      body: JSON.stringify({\n        type,\n        id,\n        options\n      })\n    })\n\n    const result = await response.json()\n\n    if (!response.ok) {\n      return NextResponse.json(\n        { error: result.error || 'PDF generation failed' },\n        { status: response.status }\n      )\n    }\n\n    return NextResponse.json(result)\n  } catch (error) {\n    console.error('PDF generation error:', error)\n    \n    return NextResponse.json(\n      { \n        error: 'Internal server error',\n        details: error instanceof Error ? error.message : 'Unknown error'\n      },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function OPTIONS() {\n  return new NextResponse(null, {\n    status: 200,\n    headers: {\n      'Access-Control-Allow-Origin': '*',\n      'Access-Control-Allow-Methods': 'POST, OPTIONS',\n      'Access-Control-Allow-Headers': 'Content-Type, Authorization',\n    },\n  })\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { authServer } from '@/lib/auth-server'
+
+export async function POST(request: NextRequest) {
+  try {
+    // Require authentication for PDF generation
+    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])
+    
+    const body = await request.json()
+    const { type, id, options = {} } = body
+
+    if (!type || !id) {
+      return NextResponse.json(
+        { error: 'Missing required fields: type and id' },
+        { status: 400 }
+      )
+    }
+
+    // Validate document type
+    const validTypes = ['skr', 'invoice', 'receipt', 'credit_note']
+    if (!validTypes.includes(type)) {
+      return NextResponse.json(
+        { error: 'Invalid document type' },
+        { status: 400 }
+      )
+    }
+
+    // Get Supabase Edge Function URL
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json(
+        { error: 'Supabase configuration missing' },
+        { status: 500 }
+      )
+    }
+
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/generate-pdf`
+
+    // Call the Edge Function
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        type,
+        id,
+        options
+      })
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: result.error || 'PDF generation failed' },
+        { status: response.status }
+      )
+    }
+
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error('PDF generation error:', error)
+    
+    return NextResponse.json(
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
+}

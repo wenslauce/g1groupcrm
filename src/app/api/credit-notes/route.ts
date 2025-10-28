@@ -1,1 +1,193 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\nimport { authServer } from '@/lib/auth-server'\nimport { creditNoteFormSchema, financialFiltersSchema } from '@/lib/validations/financial'\nimport { financialUtils } from '@/lib/financial-utils'\n\nexport async function GET(request: NextRequest) {\n  try {\n    // Require permission to view credit notes\n    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])\n    \n    const supabase = createClient()\n    const { searchParams } = new URL(request.url)\n    \n    // Parse and validate filters\n    const filters = financialFiltersSchema.parse({\n      search: searchParams.get('search') || undefined,\n      client_id: searchParams.get('client_id') || undefined,\n      date_from: searchParams.get('date_from') || undefined,\n      date_to: searchParams.get('date_to') || undefined,\n      amount_min: searchParams.get('amount_min') ? parseFloat(searchParams.get('amount_min')!) : undefined,\n      amount_max: searchParams.get('amount_max') ? parseFloat(searchParams.get('amount_max')!) : undefined,\n      currency: searchParams.get('currency') || undefined,\n      page: parseInt(searchParams.get('page') || '1'),\n      limit: parseInt(searchParams.get('limit') || '10')\n    })\n    \n    const offset = (filters.page - 1) * filters.limit\n    \n    let query = supabase\n      .from('credit_notes')\n      .select(`\n        *,\n        client:clients(*),\n        invoice:invoices(\n          id,\n          invoice_number,\n          amount,\n          status,\n          skr:skrs(id, skr_number)\n        )\n      `, { count: 'exact' })\n      .order('created_at', { ascending: false })\n    \n    // Apply filters\n    if (filters.search) {\n      query = query.or(`credit_note_number.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)\n    }\n    \n    if (filters.client_id) {\n      query = query.eq('client_id', filters.client_id)\n    }\n    \n    if (filters.date_from) {\n      query = query.gte('created_at', filters.date_from)\n    }\n    \n    if (filters.date_to) {\n      query = query.lte('created_at', filters.date_to)\n    }\n    \n    if (filters.amount_min) {\n      query = query.gte('amount', filters.amount_min)\n    }\n    \n    if (filters.amount_max) {\n      query = query.lte('amount', filters.amount_max)\n    }\n    \n    if (filters.currency) {\n      query = query.eq('currency', filters.currency)\n    }\n    \n    const { data, error, count } = await query\n      .range(offset, offset + filters.limit - 1)\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({\n      data,\n      count,\n      page: filters.page,\n      limit: filters.limit,\n      total_pages: Math.ceil((count || 0) / filters.limit)\n    })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function POST(request: NextRequest) {\n  try {\n    // Require permission to create credit notes\n    const user = await authServer.requireRole(['admin', 'finance'])\n    \n    const body = await request.json()\n    \n    // Validate request body\n    const validatedData = creditNoteFormSchema.parse(body)\n    \n    const supabase = createClient()\n    \n    // Generate credit note number\n    const creditNoteNumber = financialUtils.generateCreditNoteNumber()\n    \n    // Verify invoice exists and is accessible\n    const { data: invoice, error: invoiceError } = await supabase\n      .from('invoices')\n      .select('id, invoice_number, amount, currency, status, client_id')\n      .eq('id', validatedData.invoice_id)\n      .single()\n    \n    if (invoiceError || !invoice) {\n      return NextResponse.json({ error: 'Invoice not found or not accessible' }, { status: 400 })\n    }\n    \n    // Verify client matches\n    if (invoice.client_id !== validatedData.client_id) {\n      return NextResponse.json({ error: 'Client does not match invoice client' }, { status: 400 })\n    }\n    \n    // Check if invoice can receive credit notes\n    if (invoice.status === 'cancelled') {\n      return NextResponse.json({ error: 'Cannot create credit note for cancelled invoice' }, { status: 400 })\n    }\n    \n    // Verify currency matches\n    if (invoice.currency !== validatedData.currency) {\n      return NextResponse.json({ error: 'Currency must match invoice currency' }, { status: 400 })\n    }\n    \n    // Check existing credit notes\n    const { data: existingCreditNotes, error: creditNotesError } = await supabase\n      .from('credit_notes')\n      .select('amount')\n      .eq('invoice_id', validatedData.invoice_id)\n      .eq('status', 'applied')\n    \n    if (creditNotesError) {\n      return NextResponse.json({ error: creditNotesError.message }, { status: 400 })\n    }\n    \n    const totalCredited = existingCreditNotes.reduce((sum, cn) => sum + cn.amount, 0)\n    const maxCreditAmount = invoice.amount - totalCredited\n    \n    if (validatedData.amount > maxCreditAmount) {\n      return NextResponse.json(\n        { error: `Credit amount exceeds maximum creditable amount of ${maxCreditAmount.toFixed(2)}` },\n        { status: 400 }\n      )\n    }\n    \n    // Validate items if provided\n    if (validatedData.items) {\n      const itemErrors = financialUtils.validateInvoiceItems(validatedData.items)\n      if (itemErrors.length > 0) {\n        return NextResponse.json({ error: 'Invalid items', details: itemErrors }, { status: 400 })\n      }\n    }\n    \n    // Create credit note\n    const { data, error } = await supabase\n      .from('credit_notes')\n      .insert({\n        credit_note_number: creditNoteNumber,\n        invoice_id: validatedData.invoice_id,\n        client_id: validatedData.client_id,\n        amount: validatedData.amount,\n        currency: validatedData.currency,\n        reason: validatedData.reason,\n        description: validatedData.description,\n        items: validatedData.items,\n        status: 'draft',\n        notes: validatedData.notes,\n        metadata: validatedData.metadata || {}\n      })\n      .select(`\n        *,\n        client:clients(*),\n        invoice:invoices(\n          id,\n          invoice_number,\n          amount,\n          skr:skrs(id, skr_number)\n        )\n      `)\n      .single()\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ data }, { status: 201 })\n  } catch (error) {\n    if (error instanceof Error && error.name === 'ZodError') {\n      return NextResponse.json(\n        { error: 'Validation error', details: (error as any).errors },\n        { status: 400 }\n      )\n    }\n    \n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { authServer } from '@/lib/auth-server'
+import { z } from 'zod'
+
+const creditNoteSchema = z.object({
+  invoice_id: z.string().uuid(),
+  client_id: z.string().uuid(),
+  amount: z.number().positive(),
+  currency: z.string().length(3),
+  reason: z.enum(['return', 'discount', 'error', 'cancellation', 'other']),
+  description: z.string().optional(),
+  items: z.array(z.object({
+    description: z.string(),
+    quantity: z.number().positive(),
+    unit_price: z.number(),
+    total: z.number()
+  })).optional(),
+  notes: z.string().optional(),
+  metadata: z.record(z.any()).optional()
+})
+
+export async function GET(request: NextRequest) {
+  try {
+    // Require permission to view credit notes
+    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])
+    
+    const supabase = createClient()
+    const { searchParams } = new URL(request.url)
+    
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '10')
+    const search = searchParams.get('search') || ''
+    const clientId = searchParams.get('client_id')
+    const dateFrom = searchParams.get('date_from')
+    const dateTo = searchParams.get('date_to')
+    
+    const offset = (page - 1) * limit
+    
+    let query = supabase
+      .from('credit_notes')
+      .select(`
+        *,
+        invoice:invoices(
+          id,
+          invoice_number,
+          amount,
+          status
+        )
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+    
+    // Apply filters
+    if (search) {
+      query = query.or(`credit_note_number.ilike.%${search}%,reason.ilike.%${search}%`)
+    }
+    
+    if (clientId) {
+      query = query.eq('client_id', clientId)
+    }
+    
+    if (dateFrom) {
+      query = query.gte('created_at', dateFrom)
+    }
+    
+    if (dateTo) {
+      query = query.lte('created_at', dateTo)
+    }
+    
+    const { data, error, count } = await query
+      .range(offset, offset + limit - 1)
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({
+      data,
+      count,
+      page,
+      limit,
+      total_pages: Math.ceil((count || 0) / limit)
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Require permission to create credit notes
+    const user = await authServer.requireRole(['admin', 'finance'])
+    
+    const body = await request.json()
+    
+    // Validate request body
+    const validatedData = creditNoteSchema.parse(body)
+    
+    const supabase = createClient()
+    
+    // Generate credit note number
+    const creditNoteNumber = await generateCreditNoteNumber(supabase)
+    
+    // Verify invoice exists and is accessible
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, amount, currency, status')
+      .eq('id', validatedData.invoice_id)
+      .single()
+    
+    if (invoiceError || !invoice) {
+      return NextResponse.json({ error: 'Invoice not found or not accessible' }, { status: 404 })
+    }
+    
+    // Check if invoice can receive credit notes
+    if (invoice.status === 'cancelled') {
+      return NextResponse.json({ error: 'Cannot create credit note for cancelled invoice' }, { status: 400 })
+    }
+    
+    // Verify currency matches
+    if (invoice.currency !== validatedData.currency) {
+      return NextResponse.json({ error: 'Currency must match invoice currency' }, { status: 400 })
+    }
+    
+    // Check existing credit notes
+    const { data: existingCreditNotes } = await supabase
+      .from('credit_notes')
+      .select('amount')
+      .eq('invoice_id', validatedData.invoice_id)
+    
+    const totalCredited = (existingCreditNotes || []).reduce((sum, cn) => sum + parseFloat(cn.amount.toString()), 0)
+    const maxCreditAmount = parseFloat(invoice.amount.toString()) - totalCredited
+    
+    if (validatedData.amount > maxCreditAmount) {
+      return NextResponse.json(
+        { error: `Credit amount exceeds maximum creditable amount of ${maxCreditAmount.toFixed(2)}` },
+        { status: 400 }
+      )
+    }
+    
+    // Create credit note
+    const { data, error } = await supabase
+      .from('credit_notes')
+      .insert({
+        credit_note_number: creditNoteNumber,
+        reference_invoice: validatedData.invoice_id,
+        amount: validatedData.amount,
+        reason: validatedData.reason,
+        issue_date: new Date().toISOString()
+      })
+      .select(`
+        *,
+        invoice:invoices(
+          id,
+          invoice_number,
+          amount
+        )
+      `)
+      .single()
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({ data }, { status: 201 })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+async function generateCreditNoteNumber(supabase: any): Promise<string> {
+  const year = new Date().getFullYear()
+  const { count } = await supabase
+    .from('credit_notes')
+    .select('*', { count: 'exact', head: true })
+    .like('credit_note_number', `CN-${year}-%`)
+  
+  const nextNumber = (count || 0) + 1
+  return `CN-${year}-${nextNumber.toString().padStart(5, '0')}`
+}

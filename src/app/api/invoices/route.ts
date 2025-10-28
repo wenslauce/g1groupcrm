@@ -1,1 +1,188 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\nimport { authServer } from '@/lib/auth-server'\nimport { invoiceFormSchema, invoiceFiltersSchema } from '@/lib/validations/financial'\nimport { financialUtils } from '@/lib/financial-utils'\n\nexport async function GET(request: NextRequest) {\n  try {\n    // Require permission to view invoices\n    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])\n    \n    const supabase = createClient()\n    const { searchParams } = new URL(request.url)\n    \n    // Parse and validate filters\n    const filters = invoiceFiltersSchema.parse({\n      search: searchParams.get('search') || undefined,\n      status: searchParams.get('status') || undefined,\n      client_id: searchParams.get('client_id') || undefined,\n      skr_id: searchParams.get('skr_id') || undefined,\n      date_from: searchParams.get('date_from') || undefined,\n      date_to: searchParams.get('date_to') || undefined,\n      amount_min: searchParams.get('amount_min') ? parseFloat(searchParams.get('amount_min')!) : undefined,\n      amount_max: searchParams.get('amount_max') ? parseFloat(searchParams.get('amount_max')!) : undefined,\n      page: parseInt(searchParams.get('page') || '1'),\n      limit: parseInt(searchParams.get('limit') || '10')\n    })\n    \n    const offset = (filters.page - 1) * filters.limit\n    \n    let query = supabase\n      .from('invoices')\n      .select(`\n        *,\n        client:clients(*),\n        skr:skrs(\n          id,\n          skr_number,\n          status,\n          asset:assets(id, asset_name, asset_type)\n        ),\n        receipts:receipts(*)\n      `, { count: 'exact' })\n      .order('created_at', { ascending: false })\n    \n    // Apply filters\n    if (filters.search) {\n      query = query.or(`invoice_number.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)\n    }\n    \n    if (filters.status) {\n      query = query.eq('status', filters.status)\n    }\n    \n    if (filters.client_id) {\n      query = query.eq('client_id', filters.client_id)\n    }\n    \n    if (filters.skr_id) {\n      query = query.eq('skr_id', filters.skr_id)\n    }\n    \n    if (filters.date_from) {\n      query = query.gte('created_at', filters.date_from)\n    }\n    \n    if (filters.date_to) {\n      query = query.lte('created_at', filters.date_to)\n    }\n    \n    if (filters.amount_min) {\n      query = query.gte('amount', filters.amount_min)\n    }\n    \n    if (filters.amount_max) {\n      query = query.lte('amount', filters.amount_max)\n    }\n    \n    const { data, error, count } = await query\n      .range(offset, offset + filters.limit - 1)\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({\n      data,\n      count,\n      page: filters.page,\n      limit: filters.limit,\n      total_pages: Math.ceil((count || 0) / filters.limit)\n    })\n  } catch (error) {\n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}\n\nexport async function POST(request: NextRequest) {\n  try {\n    // Require permission to create invoices\n    const user = await authServer.requireRole(['admin', 'finance'])\n    \n    const body = await request.json()\n    \n    // Validate request body\n    const validatedData = invoiceFormSchema.parse(body)\n    \n    const supabase = createClient()\n    \n    // Generate invoice number\n    const invoiceNumber = financialUtils.generateInvoiceNumber()\n    \n    // Verify client exists and is accessible\n    const { data: client, error: clientError } = await supabase\n      .from('clients')\n      .select('id, name, compliance_status')\n      .eq('id', validatedData.client_id)\n      .single()\n    \n    if (clientError || !client) {\n      return NextResponse.json({ error: 'Client not found or not accessible' }, { status: 400 })\n    }\n    \n    if (client.compliance_status !== 'approved') {\n      return NextResponse.json({ error: 'Client must have approved compliance status' }, { status: 400 })\n    }\n    \n    // Verify SKR if provided\n    if (validatedData.skr_id) {\n      const { data: skr, error: skrError } = await supabase\n        .from('skrs')\n        .select('id, skr_number, client_id')\n        .eq('id', validatedData.skr_id)\n        .eq('client_id', validatedData.client_id)\n        .single()\n      \n      if (skrError || !skr) {\n        return NextResponse.json({ error: 'SKR not found or does not belong to client' }, { status: 400 })\n      }\n    }\n    \n    // Validate invoice items\n    const itemErrors = financialUtils.validateInvoiceItems(validatedData.items)\n    if (itemErrors.length > 0) {\n      return NextResponse.json({ error: 'Invalid items', details: itemErrors }, { status: 400 })\n    }\n    \n    // Calculate totals\n    const subtotal = financialUtils.calculateSubtotal(validatedData.items)\n    const taxAmount = financialUtils.calculateTaxAmount(subtotal, validatedData.tax_rate)\n    const total = financialUtils.calculateInvoiceTotal(validatedData.items, validatedData.tax_rate, validatedData.discount_amount)\n    \n    // Set due date if not provided\n    const dueDate = validatedData.due_date || financialUtils.calculateDueDate(new Date().toISOString())\n    \n    // Create invoice\n    const { data, error } = await supabase\n      .from('invoices')\n      .insert({\n        invoice_number: invoiceNumber,\n        client_id: validatedData.client_id,\n        skr_id: validatedData.skr_id,\n        amount: total,\n        currency: validatedData.currency,\n        due_date: dueDate,\n        description: validatedData.description,\n        items: validatedData.items,\n        tax_rate: validatedData.tax_rate,\n        tax_amount: taxAmount,\n        discount_amount: validatedData.discount_amount,\n        subtotal: subtotal,\n        status: 'draft',\n        notes: validatedData.notes,\n        metadata: validatedData.metadata || {}\n      })\n      .select(`\n        *,\n        client:clients(*),\n        skr:skrs(\n          id,\n          skr_number,\n          asset:assets(id, asset_name)\n        )\n      `)\n      .single()\n    \n    if (error) {\n      return NextResponse.json({ error: error.message }, { status: 400 })\n    }\n    \n    return NextResponse.json({ data }, { status: 201 })\n  } catch (error) {\n    if (error instanceof Error && error.name === 'ZodError') {\n      return NextResponse.json(\n        { error: 'Validation error', details: (error as any).errors },\n        { status: 400 }\n      )\n    }\n    \n    return NextResponse.json(\n      { error: error instanceof Error ? error.message : 'Internal server error' },\n      { status: 500 }\n    )\n  }\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { authServer } from '@/lib/auth-server'
+import { z } from 'zod'
+
+const invoiceSchema = z.object({
+  client_id: z.string().uuid(),
+  skr_id: z.string().uuid().optional(),
+  amount: z.number().positive(),
+  currency: z.string().length(3).default('USD'),
+  due_date: z.string().datetime().optional(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+  metadata: z.record(z.any()).optional()
+})
+
+export async function GET(request: NextRequest) {
+  try {
+    // Require permission to view invoices
+    const user = await authServer.requireRole(['admin', 'finance', 'operations', 'compliance'])
+    
+    const supabase = createClient()
+    const { searchParams } = new URL(request.url)
+    
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '10')
+    const search = searchParams.get('search') || ''
+    const status = searchParams.get('status') || ''
+    const clientId = searchParams.get('client_id') || ''
+    const skrId = searchParams.get('skr_id') || ''
+    
+    const offset = (page - 1) * limit
+    
+    let query = supabase
+      .from('invoices')
+      .select(`
+        *,
+        clients(id, name, email, type, country),
+        skrs(
+          id,
+          skr_number,
+          status,
+          assets(id, asset_name, asset_type)
+        ),
+        receipts(*)
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+    
+    // Apply filters
+    if (search) {
+      query = query.or(`invoice_number.ilike.%${search}%`)
+    }
+    
+    if (status) {
+      query = query.eq('status', status)
+    }
+    
+    if (clientId) {
+      query = query.eq('client_id', clientId)
+    }
+    
+    if (skrId) {
+      query = query.eq('skr_id', skrId)
+    }
+    
+    const { data, error, count } = await query
+      .range(offset, offset + limit - 1)
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({
+      data,
+      count,
+      page,
+      limit,
+      total_pages: Math.ceil((count || 0) / limit)
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Require permission to create invoices
+    const user = await authServer.requireRole(['admin', 'finance'])
+    
+    const body = await request.json()
+    
+    // Validate request body
+    const validatedData = invoiceSchema.parse(body)
+    
+    const supabase = createClient()
+    
+    // Generate invoice number
+    const invoiceNumber = await generateInvoiceNumber(supabase)
+    
+    // Verify client exists and is accessible
+    const { data: client, error: clientError } = await supabase
+      .from('clients')
+      .select('id, name, compliance_status')
+      .eq('id', validatedData.client_id)
+      .single()
+    
+    if (clientError || !client) {
+      return NextResponse.json({ error: 'Client not found or not accessible' }, { status: 404 })
+    }
+    
+    if (client.compliance_status !== 'approved') {
+      return NextResponse.json({ error: 'Client must have approved compliance status' }, { status: 400 })
+    }
+    
+    // Verify SKR if provided
+    if (validatedData.skr_id) {
+      const { data: skr, error: skrError } = await supabase
+        .from('skrs')
+        .select('id, skr_number, client_id')
+        .eq('id', validatedData.skr_id)
+        .eq('client_id', validatedData.client_id)
+        .single()
+      
+      if (skrError || !skr) {
+        return NextResponse.json({ error: 'SKR not found or does not belong to client' }, { status: 404 })
+      }
+    }
+    
+    // Set due date if not provided (30 days from now)
+    const dueDate = validatedData.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    
+    // Create invoice
+    const { data, error } = await supabase
+      .from('invoices')
+      .insert({
+        invoice_number: invoiceNumber,
+        client_id: validatedData.client_id,
+        skr_id: validatedData.skr_id,
+        amount: validatedData.amount,
+        currency: validatedData.currency,
+        due_date: dueDate,
+        status: 'draft',
+        created_at: new Date().toISOString()
+      })
+      .select(`
+        *,
+        clients(id, name, email),
+        skrs(
+          id,
+          skr_number,
+          assets(id, asset_name)
+        )
+      `)
+      .single()
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    
+    return NextResponse.json({ data }, { status: 201 })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+async function generateInvoiceNumber(supabase: any): Promise<string> {
+  const year = new Date().getFullYear()
+  const { count } = await supabase
+    .from('invoices')
+    .select('*', { count: 'exact', head: true })
+    .like('invoice_number', `INV-${year}-%`)
+  
+  const nextNumber = (count || 0) + 1
+  return `INV-${year}-${nextNumber.toString().padStart(5, '0')}`
+}
