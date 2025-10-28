@@ -28,42 +28,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
 
   useEffect(() => {
-    // Get initial session
+    let mounted = true
+
+    // Get initial session with caching
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (session?.user) {
-        const authUser = await authClient.getCurrentUser()
-        setUser(authUser)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (mounted) {
+          if (session?.user) {
+            const authUser = await authClient.getCurrentUser()
+            setUser(authUser)
+          }
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Error getting initial session:', error)
+        if (mounted) {
+          setLoading(false)
+        }
       }
-      
-      setLoading(false)
     }
 
     getInitialSession()
 
-    // Listen for auth changes
+    // Listen for auth changes with debouncing
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          const authUser = await authClient.getCurrentUser()
-          setUser(authUser)
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null)
+        console.log('Auth state change:', { event, hasSession: !!session, hasUser: !!session?.user })
+        if (!mounted) return
+
+        try {
+          if (event === 'SIGNED_IN' && session?.user) {
+            console.log('User signed in, fetching user profile...')
+            const authUser = await authClient.getCurrentUser()
+            console.log('User profile fetched:', authUser)
+            setUser(authUser)
+          } else if (event === 'SIGNED_OUT') {
+            console.log('User signed out')
+            setUser(null)
+          }
+          setLoading(false)
+        } catch (error) {
+          console.error('Error handling auth state change:', error)
+          if (mounted) {
+            setLoading(false)
+          }
         }
-        setLoading(false)
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [supabase.auth])
 
   const signIn = async (email: string, password: string) => {
+    console.log('AuthContext signIn called with:', { email, password: password ? '***' : 'empty' })
     setLoading(true)
     try {
+      console.log('Calling authClient.signIn...')
       await authClient.signIn({ email, password })
+      console.log('authClient.signIn completed successfully')
       // User state will be updated by the auth state change listener
+      // Don't set loading to false here - let the auth state change listener handle it
     } catch (error) {
+      console.error('AuthContext signIn error:', error)
       setLoading(false)
       throw error
     }

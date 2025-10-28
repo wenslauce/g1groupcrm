@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Building2, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 import { roleUtils } from '@/lib/auth-client'
 
 export function SignUpForm() {
@@ -80,7 +81,14 @@ export function SignUpForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex items-center justify-center mb-4">
-            <Building2 className="h-12 w-12 text-g1-primary" />
+            <Image
+              src="/logo.png"
+              alt="G1 Holdings Logo"
+              width={80}
+              height={80}
+              className="object-contain"
+              priority
+            />
           </div>
           <CardTitle className="text-2xl font-bold text-g1-primary">
             Create Account

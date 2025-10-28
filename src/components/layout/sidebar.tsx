@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { 
-  Building2, 
   FileText, 
   Users, 
   DollarSign, 
@@ -21,6 +20,7 @@ import {
   Activity,
   Bell
 } from 'lucide-react'
+import Image from 'next/image'
 
 interface SidebarProps {
   className?: string
@@ -104,7 +104,13 @@ export function Sidebar({ className }: SidebarProps) {
       {/* Fixed Header */}
       <div className="px-3 py-4 border-b">
         <div className="flex items-center mb-4">
-          <Building2 className="h-8 w-8 text-g1-primary mr-3" />
+          <Image
+            src="/logo.png"
+            alt="G1 Holdings Logo"
+            width={32}
+            height={32}
+            className="object-contain mr-3"
+          />
           <div>
             <h2 className="text-lg font-semibold text-g1-primary">G1 Holdings</h2>
             <p className="text-xs text-muted-foreground">Command Center</p>

@@ -64,17 +64,23 @@ export const authClient = {
   },
 
   async signIn(data: SignInData) {
+    console.log('authClient.signIn called with:', { email: data.email, password: data.password ? '***' : 'empty' })
     const supabase = createClient()
     
+    console.log('Calling supabase.auth.signInWithPassword...')
     const { data: authData, error } = await supabase.auth.signInWithPassword({
       email: data.email,
       password: data.password,
     })
 
+    console.log('Supabase auth response:', { authData: authData ? 'success' : 'null', error: error?.message || 'none' })
+
     if (error) {
+      console.error('Supabase auth error:', error)
       throw new Error(error.message)
     }
 
+    console.log('Sign in successful, returning auth data')
     return authData
   },
 
@@ -88,25 +94,50 @@ export const authClient = {
   },
 
   async getCurrentUser(): Promise<AuthUser | null> {
+    console.log('getCurrentUser called')
     const supabase = createClient()
     
-    const { data: { user }, error } = await supabase.auth.getUser()
-    
-    if (error || !user) {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser()
+      console.log('Supabase getUser result:', { user: user ? 'found' : 'null', error: error?.message || 'none' })
+      
+      if (error || !user) {
+        console.log('No user found or error occurred')
+        return null
+      }
+
+      // Get user profile with error handling
+      console.log('Fetching user profile for user:', user.id)
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      console.log('Profile fetch result:', { profile: profile ? 'found' : 'null', error: profileError?.message || 'none' })
+
+      if (profileError) {
+        console.warn('Error fetching user profile:', profileError)
+        // Return user without profile if profile fetch fails
+        const authUser = {
+          id: user.id,
+          email: user.email!,
+          profile: undefined
+        }
+        console.log('Returning user without profile:', authUser)
+        return authUser
+      }
+
+      const authUser = {
+        id: user.id,
+        email: user.email!,
+        profile: profile || undefined
+      }
+      console.log('Returning user with profile:', authUser)
+      return authUser
+    } catch (error) {
+      console.error('Error getting current user:', error)
       return null
-    }
-
-    // Get user profile
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-
-    return {
-      id: user.id,
-      email: user.email!,
-      profile: profile || undefined
     }
   },
 

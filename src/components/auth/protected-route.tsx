@@ -21,16 +21,21 @@ export function ProtectedRoute({
   const router = useRouter()
 
   useEffect(() => {
+    console.log('ProtectedRoute useEffect:', { user, loading, requiredRoles })
     if (!loading) {
       // Not authenticated
       if (!user) {
+        console.log('No user found, redirecting to login')
         router.push(fallbackUrl)
         return
       }
 
+      console.log('User authenticated:', user)
+
       // Check role requirements
       if (requiredRoles.length > 0 && user.profile) {
         const hasRequiredRole = requiredRoles.includes(user.profile.role)
+        console.log('Role check:', { userRole: user.profile.role, requiredRoles, hasRequiredRole })
         if (!hasRequiredRole) {
           router.push('/dashboard/unauthorized')
           return
@@ -42,10 +47,13 @@ export function ProtectedRoute({
   // Show loading spinner while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-g1-primary" />
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Authenticating...</p>
+            <p className="text-xs text-muted-foreground">Please wait while we verify your credentials</p>
+          </div>
         </div>
       </div>
     )

@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Building2, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
@@ -21,15 +22,42 @@ export function LoginForm() {
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('Form submitted!', { email, password: password ? '***' : 'empty' })
     e.preventDefault()
     setIsLoading(true)
     setError('')
 
+    // Basic validation
+    if (!email || !password) {
+      console.log('Validation failed: missing fields')
+      setError('Please fill in all fields')
+      setIsLoading(false)
+      return
+    }
+
     try {
+      console.log('Attempting sign in...')
       await signIn(email, password)
+      console.log('Sign in successful!')
+      // Redirect to dashboard after successful login
       router.push('/dashboard')
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'An error occurred')
+      console.error('Login error:', error)
+      
+      // Handle specific error types
+      if (error instanceof Error) {
+        if (error.message.includes('storage') || error.message.includes('localStorage')) {
+          setError('Browser storage error. Please try refreshing the page or clearing your browser data.')
+        } else if (error.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please check your credentials and try again.')
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Please check your email and click the confirmation link before signing in.')
+        } else {
+          setError(error.message)
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -40,7 +68,14 @@ export function LoginForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex items-center justify-center mb-4">
-            <Building2 className="h-12 w-12 text-g1-primary" />
+            <Image
+              src="/logo.png"
+              alt="G1 Holdings Logo"
+              width={80}
+              height={80}
+              className="object-contain"
+              priority
+            />
           </div>
           <CardTitle className="text-2xl font-bold text-g1-primary">
             G1 Holdings
@@ -114,23 +149,13 @@ export function LoginForm() {
               )}
             </Button>
 
-            <div className="text-center space-y-2">
+            <div className="text-center">
               <Link
                 href="/auth/forgot-password"
                 className="text-sm text-g1-primary hover:underline"
               >
                 Forgot your password?
               </Link>
-              
-              <div className="text-sm text-muted-foreground">
-                Need access?{' '}
-                <Link
-                  href="/auth/request-access"
-                  className="text-g1-primary hover:underline"
-                >
-                  Request account
-                </Link>
-              </div>
             </div>
           </form>
         </CardContent>

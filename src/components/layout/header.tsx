@@ -10,7 +10,6 @@ import { NotificationCenter } from '@/components/notifications/notification-cent
 import { GlobalSearchBar } from '@/components/search/global-search-bar'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { 
-  Building2, 
   FileText, 
   Users, 
   DollarSign, 
@@ -62,8 +61,7 @@ export function Header() {
             <SheetContent side="left" className="w-64">
               <div className="flex flex-col h-full">
                 <div className="flex items-center space-x-2 mb-6">
-                  <Building2 className="h-6 w-6 text-g1-primary" />
-                  <span className="font-bold text-g1-primary">G1 Holdings</span>
+                  {/* Brand removed - clean mobile menu */}
                 </div>
                 
                 <nav className="flex-1 space-y-2">
@@ -119,10 +117,7 @@ export function Header() {
         {/* Logo and Brand */}
         <div className="mr-4 flex items-center">
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <Building2 className="h-6 w-6 text-g1-primary" />
-            <span className="hidden font-bold sm:inline-block text-g1-primary">
-              G1 Holdings
-            </span>
+            {/* Brand removed - clean header */}
           </Link>
         </div>
 
