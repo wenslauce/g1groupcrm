@@ -1,1 +1,402 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Badge } from '@/components/ui/badge'\nimport { Button } from '@/components/ui/button'\nimport { Input } from '@/components/ui/input'\nimport { Label } from '@/components/ui/label'\nimport { \n  CheckCircle, \n  XCircle, \n  Shield, \n  FileText, \n  User, \n  Package,\n  Calendar,\n  Hash,\n  Loader2,\n  AlertTriangle,\n  Eye,\n  EyeOff\n} from 'lucide-react'\nimport { formatCurrency, formatDateTime } from '@/lib/utils'\n\ninterface VerificationResult {\n  valid: boolean\n  skr_number: string\n  status?: string\n  issue_date?: string\n  hash_valid?: boolean\n  verification_time?: string\n  client?: {\n    name: string\n    country: string\n  }\n  asset?: {\n    name: string\n    type: string\n    declared_value: number\n    currency: string\n  }\n  hash_provided?: boolean\n  hash_available?: boolean\n  error?: string\n}\n\ninterface SKRVerificationPageProps {\n  params: { skrNumber: string }\n}\n\nexport default function SKRVerificationPage({ params }: SKRVerificationPageProps) {\n  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null)\n  const [loading, setLoading] = useState(true)\n  const [hashInput, setHashInput] = useState('')\n  const [showHashInput, setShowHashInput] = useState(false)\n  const [verifyingHash, setVerifyingHash] = useState(false)\n\n  const skrNumber = decodeURIComponent(params.skrNumber)\n\n  useEffect(() => {\n    verifySKR()\n  }, [])\n\n  const verifySkR = async (hash?: string) => {\n    setLoading(true)\n    try {\n      const url = new URL(`/api/verify/skr/${encodeURIComponent(skrNumber)}`, window.location.origin)\n      if (hash) {\n        url.searchParams.set('hash', hash)\n      }\n      \n      const response = await fetch(url.toString())\n      const result = await response.json()\n      \n      setVerificationResult(result)\n    } catch (error) {\n      setVerificationResult({\n        valid: false,\n        skr_number: skrNumber,\n        error: 'Failed to verify SKR. Please try again later.'\n      })\n    } finally {\n      setLoading(false)\n      setVerifyingHash(false)\n    }\n  }\n\n  const handleHashVerification = async () => {\n    if (!hashInput.trim()) return\n    \n    setVerifyingHash(true)\n    await verifySkR(hashInput.trim())\n  }\n\n  const getStatusColor = (status: string) => {\n    const colors: Record<string, string> = {\n      issued: 'bg-yellow-100 text-yellow-800',\n      in_transit: 'bg-orange-100 text-orange-800',\n      delivered: 'bg-green-100 text-green-800',\n      closed: 'bg-purple-100 text-purple-800'\n    }\n    return colors[status] || 'bg-gray-100 text-gray-800'\n  }\n\n  const getStatusDisplayName = (status: string) => {\n    const names: Record<string, string> = {\n      issued: 'Issued',\n      in_transit: 'In Transit',\n      delivered: 'Delivered',\n      closed: 'Closed'\n    }\n    return names[status] || status.replace('_', ' ').toUpperCase()\n  }\n\n  return (\n    <div className=\"min-h-screen bg-gray-50 py-12 px-4\">\n      <div className=\"max-w-4xl mx-auto\">\n        {/* Header */}\n        <div className=\"text-center mb-8\">\n          <div className=\"flex items-center justify-center mb-4\">\n            <Shield className=\"h-12 w-12 text-blue-600 mr-3\" />\n            <h1 className=\"text-3xl font-bold text-gray-900\">G1 Holding</h1>\n          </div>\n          <h2 className=\"text-xl text-gray-600\">SKR Verification System</h2>\n          <p className=\"text-sm text-gray-500 mt-2\">\n            Verify the authenticity of Secure Keeper Receipts\n          </p>\n        </div>\n\n        {/* SKR Number Display */}\n        <Card className=\"mb-6\">\n          <CardHeader className=\"text-center\">\n            <CardTitle className=\"flex items-center justify-center gap-2\">\n              <FileText className=\"h-6 w-6\" />\n              SKR Verification\n            </CardTitle>\n            <div className=\"text-2xl font-mono font-bold text-blue-600 mt-2\">\n              {skrNumber}\n            </div>\n          </CardHeader>\n        </Card>\n\n        {/* Loading State */}\n        {loading && (\n          <Card>\n            <CardContent className=\"p-8\">\n              <div className=\"flex items-center justify-center\">\n                <Loader2 className=\"h-8 w-8 animate-spin text-blue-600 mr-3\" />\n                <span className=\"text-lg\">Verifying SKR...</span>\n              </div>\n            </CardContent>\n          </Card>\n        )}\n\n        {/* Verification Results */}\n        {!loading && verificationResult && (\n          <div className=\"space-y-6\">\n            {/* Verification Status */}\n            <Card>\n              <CardHeader>\n                <CardTitle className=\"flex items-center gap-2\">\n                  {verificationResult.valid ? (\n                    <CheckCircle className=\"h-6 w-6 text-green-600\" />\n                  ) : (\n                    <XCircle className=\"h-6 w-6 text-red-600\" />\n                  )}\n                  Verification Status\n                </CardTitle>\n              </CardHeader>\n              <CardContent>\n                {verificationResult.valid ? (\n                  <div className=\"text-center py-4\">\n                    <div className=\"text-2xl font-bold text-green-600 mb-2\">\n                      ✓ VALID SKR\n                    </div>\n                    <p className=\"text-gray-600\">\n                      This SKR has been verified as authentic and issued by G1 Holding\n                    </p>\n                    <p className=\"text-sm text-gray-500 mt-2\">\n                      Verified on: {verificationResult.verification_time ? \n                        formatDateTime(verificationResult.verification_time) : \n                        new Date().toLocaleString()\n                      }\n                    </p>\n                  </div>\n                ) : (\n                  <div className=\"text-center py-4\">\n                    <div className=\"text-2xl font-bold text-red-600 mb-2\">\n                      ✗ INVALID SKR\n                    </div>\n                    <p className=\"text-gray-600 mb-2\">\n                      {verificationResult.error || 'This SKR could not be verified'}\n                    </p>\n                    <div className=\"bg-red-50 border border-red-200 rounded-lg p-4 mt-4\">\n                      <div className=\"flex items-center\">\n                        <AlertTriangle className=\"h-5 w-5 text-red-600 mr-2\" />\n                        <span className=\"text-sm text-red-800\">\n                          Warning: This document may not be authentic. Please contact G1 Holding to verify.\n                        </span>\n                      </div>\n                    </div>\n                  </div>\n                )}\n              </CardContent>\n            </Card>\n\n            {/* SKR Details (only if valid) */}\n            {verificationResult.valid && (\n              <>\n                {/* Basic Information */}\n                <Card>\n                  <CardHeader>\n                    <CardTitle>SKR Information</CardTitle>\n                  </CardHeader>\n                  <CardContent>\n                    <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n                      <div>\n                        <Label className=\"text-sm font-medium text-gray-500\">Status</Label>\n                        <div className=\"mt-1\">\n                          <Badge className={getStatusColor(verificationResult.status || '')}>\n                            {getStatusDisplayName(verificationResult.status || '')}\n                          </Badge>\n                        </div>\n                      </div>\n                      \n                      {verificationResult.issue_date && (\n                        <div>\n                          <Label className=\"text-sm font-medium text-gray-500\">Issue Date</Label>\n                          <div className=\"mt-1 flex items-center\">\n                            <Calendar className=\"h-4 w-4 text-gray-400 mr-2\" />\n                            {formatDateTime(verificationResult.issue_date)}\n                          </div>\n                        </div>\n                      )}\n                    </div>\n                  </CardContent>\n                </Card>\n\n                {/* Client Information */}\n                {verificationResult.client && (\n                  <Card>\n                    <CardHeader>\n                      <CardTitle className=\"flex items-center gap-2\">\n                        <User className=\"h-5 w-5\" />\n                        Client Information\n                      </CardTitle>\n                    </CardHeader>\n                    <CardContent>\n                      <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n                        <div>\n                          <Label className=\"text-sm font-medium text-gray-500\">Client Name</Label>\n                          <div className=\"mt-1 font-medium\">{verificationResult.client.name}</div>\n                        </div>\n                        <div>\n                          <Label className=\"text-sm font-medium text-gray-500\">Country</Label>\n                          <div className=\"mt-1\">{verificationResult.client.country}</div>\n                        </div>\n                      </div>\n                    </CardContent>\n                  </Card>\n                )}\n\n                {/* Asset Information */}\n                {verificationResult.asset && (\n                  <Card>\n                    <CardHeader>\n                      <CardTitle className=\"flex items-center gap-2\">\n                        <Package className=\"h-5 w-5\" />\n                        Asset Information\n                      </CardTitle>\n                    </CardHeader>\n                    <CardContent>\n                      <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n                        <div>\n                          <Label className=\"text-sm font-medium text-gray-500\">Asset Name</Label>\n                          <div className=\"mt-1 font-medium\">{verificationResult.asset.name}</div>\n                        </div>\n                        <div>\n                          <Label className=\"text-sm font-medium text-gray-500\">Asset Type</Label>\n                          <div className=\"mt-1\">{verificationResult.asset.type}</div>\n                        </div>\n                        <div>\n                          <Label className=\"text-sm font-medium text-gray-500\">Declared Value</Label>\n                          <div className=\"mt-1 font-medium\">\n                            {formatCurrency(verificationResult.asset.declared_value, verificationResult.asset.currency)}\n                          </div>\n                        </div>\n                      </div>\n                    </CardContent>\n                  </Card>\n                )}\n\n                {/* Hash Verification */}\n                {verificationResult.hash_available && (\n                  <Card>\n                    <CardHeader>\n                      <CardTitle className=\"flex items-center gap-2\">\n                        <Hash className=\"h-5 w-5\" />\n                        Digital Hash Verification\n                      </CardTitle>\n                      <CardDescription>\n                        Verify the document's digital signature for additional security\n                      </CardDescription>\n                    </CardHeader>\n                    <CardContent>\n                      {!showHashInput ? (\n                        <div className=\"text-center\">\n                          <Button \n                            onClick={() => setShowHashInput(true)}\n                            variant=\"outline\"\n                            className=\"flex items-center gap-2\"\n                          >\n                            <Eye className=\"h-4 w-4\" />\n                            Verify Digital Hash\n                          </Button>\n                        </div>\n                      ) : (\n                        <div className=\"space-y-4\">\n                          <div>\n                            <Label htmlFor=\"hash\">Enter Digital Hash</Label>\n                            <Input\n                              id=\"hash\"\n                              value={hashInput}\n                              onChange={(e) => setHashInput(e.target.value)}\n                              placeholder=\"Enter the digital hash from the original document\"\n                              className=\"font-mono text-sm\"\n                            />\n                          </div>\n                          \n                          <div className=\"flex gap-2\">\n                            <Button \n                              onClick={handleHashVerification}\n                              disabled={!hashInput.trim() || verifyingHash}\n                              className=\"flex items-center gap-2\"\n                            >\n                              {verifyingHash ? (\n                                <Loader2 className=\"h-4 w-4 animate-spin\" />\n                              ) : (\n                                <Shield className=\"h-4 w-4\" />\n                              )}\n                              {verifyingHash ? 'Verifying...' : 'Verify Hash'}\n                            </Button>\n                            \n                            <Button \n                              variant=\"outline\"\n                              onClick={() => {\n                                setShowHashInput(false)\n                                setHashInput('')\n                              }}\n                            >\n                              <EyeOff className=\"h-4 w-4 mr-2\" />\n                              Hide\n                            </Button>\n                          </div>\n                          \n                          {verificationResult.hash_provided !== undefined && (\n                            <div className={`p-3 rounded-lg ${\n                              verificationResult.hash_valid \n                                ? 'bg-green-50 border border-green-200' \n                                : 'bg-red-50 border border-red-200'\n                            }`}>\n                              <div className=\"flex items-center\">\n                                {verificationResult.hash_valid ? (\n                                  <CheckCircle className=\"h-5 w-5 text-green-600 mr-2\" />\n                                ) : (\n                                  <XCircle className=\"h-5 w-5 text-red-600 mr-2\" />\n                                )}\n                                <span className={`text-sm font-medium ${\n                                  verificationResult.hash_valid ? 'text-green-800' : 'text-red-800'\n                                }`}>\n                                  {verificationResult.hash_valid \n                                    ? 'Hash verification successful - Document is authentic'\n                                    : 'Hash verification failed - Document may have been modified'\n                                  }\n                                </span>\n                              </div>\n                            </div>\n                          )}\n                        </div>\n                      )}\n                    </CardContent>\n                  </Card>\n                )}\n              </>\n            )}\n          </div>\n        )}\n\n        {/* Footer */}\n        <div className=\"text-center mt-12 text-sm text-gray-500\">\n          <p>© 2024 G1 Holding. All rights reserved.</p>\n          <p className=\"mt-1\">\n            For questions about this verification, please contact: \n            <a href=\"mailto:verify@g1holding.com\" className=\"text-blue-600 hover:underline ml-1\">\n              verify@g1holding.com\n            </a>\n          </p>\n        </div>\n      </div>\n    </div>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { 
+  CheckCircle, 
+  XCircle, 
+  Shield, 
+  FileText, 
+  User, 
+  Package,
+  Calendar,
+  Hash,
+  Loader2,
+  AlertTriangle,
+  Eye,
+  EyeOff
+} from 'lucide-react'
+import { formatCurrency, formatDateTime } from '@/lib/utils'
+
+interface VerificationResult {
+  valid: boolean
+  skr_number: string
+  status?: string
+  issue_date?: string
+  hash_valid?: boolean
+  verification_time?: string
+  client?: {
+    name: string
+    country: string
+  }
+  asset?: {
+    name: string
+    type: string
+    declared_value: number
+    currency: string
+  }
+  hash_provided?: boolean
+  hash_available?: boolean
+  error?: string
+}
+
+interface SKRVerificationPageProps {
+  params: { skrNumber: string }
+}
+
+export default function SKRVerificationPage({ params }: SKRVerificationPageProps) {
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [hashInput, setHashInput] = useState('')
+  const [showHashInput, setShowHashInput] = useState(false)
+  const [verifyingHash, setVerifyingHash] = useState(false)
+
+  const skrNumber = decodeURIComponent(params.skrNumber)
+
+  useEffect(() => {
+    verifySKR()
+  }, [])
+
+  const verifySKR = async (hash?: string) => {
+    setLoading(true)
+    try {
+      const url = new URL(`/api/verify/skr/${encodeURIComponent(skrNumber)}`, window.location.origin)
+      if (hash) {
+        url.searchParams.set('hash', hash)
+      }
+      
+      const response = await fetch(url.toString())
+      const result = await response.json()
+      
+      setVerificationResult(result)
+    } catch (error) {
+      setVerificationResult({
+        valid: false,
+        skr_number: skrNumber,
+        error: 'Failed to verify SKR. Please try again later.'
+      })
+    } finally {
+      setLoading(false)
+      setVerifyingHash(false)
+    }
+  }
+
+  const handleHashVerification = async () => {
+    if (!hashInput.trim()) return
+    
+    setVerifyingHash(true)
+    await verifySKR(hashInput.trim())
+  }
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      issued: 'bg-yellow-100 text-yellow-800',
+      in_transit: 'bg-orange-100 text-orange-800',
+      delivered: 'bg-green-100 text-green-800',
+      closed: 'bg-purple-100 text-purple-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getStatusDisplayName = (status: string) => {
+    const names: Record<string, string> = {
+      issued: 'Issued',
+      in_transit: 'In Transit',
+      delivered: 'Delivered',
+      closed: 'Closed'
+    }
+    return names[status] || status.replace('_', ' ').toUpperCase()
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <Shield className="h-12 w-12 text-blue-600 mr-3" />
+            <h1 className="text-3xl font-bold text-gray-900">G1 Holding</h1>
+          </div>
+          <h2 className="text-xl text-gray-600">SKR Verification System</h2>
+          <p className="text-sm text-gray-500 mt-2">
+            Verify the authenticity of Secure Keeper Receipts
+          </p>
+        </div>
+
+        {/* SKR Number Display */}
+        <Card className="mb-6">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2">
+              <FileText className="h-6 w-6" />
+              SKR Verification
+            </CardTitle>
+            <div className="text-2xl font-mono font-bold text-blue-600 mt-2">
+              {skrNumber}
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Loading State */}
+        {loading && (
+          <Card>
+            <CardContent className="p-8">
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" />
+                <span className="text-lg">Verifying SKR...</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Verification Results */}
+        {!loading && verificationResult && (
+          <div className="space-y-6">
+            {/* Verification Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {verificationResult.valid ? (
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  ) : (
+                    <XCircle className="h-6 w-6 text-red-600" />
+                  )}
+                  Verification Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {verificationResult.valid ? (
+                  <div className="text-center py-4">
+                    <div className="text-2xl font-bold text-green-600 mb-2">
+                      ✓ VALID SKR
+                    </div>
+                    <p className="text-gray-600">
+                      This SKR has been verified as authentic and issued by G1 Holding
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Verified on: {verificationResult.verification_time ? 
+                        formatDateTime(verificationResult.verification_time) : 
+                        new Date().toLocaleString()
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <div className="text-2xl font-bold text-red-600 mb-2">
+                      ✗ INVALID SKR
+                    </div>
+                    <p className="text-gray-600 mb-2">
+                      {verificationResult.error || 'This SKR could not be verified'}
+                    </p>
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+                      <div className="flex items-center">
+                        <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+                        <span className="text-sm text-red-800">
+                          Warning: This document may not be authentic. Please contact G1 Holding to verify.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SKR Details (only if valid) */}
+            {verificationResult.valid && (
+              <>
+                {/* Basic Information */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>SKR Information</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Status</Label>
+                        <div className="mt-1">
+                          <Badge className={getStatusColor(verificationResult.status || '')}>
+                            {getStatusDisplayName(verificationResult.status || '')}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      {verificationResult.issue_date && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Issue Date</Label>
+                          <div className="mt-1 flex items-center">
+                            <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                            {formatDateTime(verificationResult.issue_date)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Client Information */}
+                {verificationResult.client && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <User className="h-5 w-5" />
+                        Client Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Client Name</Label>
+                          <div className="mt-1 font-medium">{verificationResult.client.name}</div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Country</Label>
+                          <div className="mt-1">{verificationResult.client.country}</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Asset Information */}
+                {verificationResult.asset && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Package className="h-5 w-5" />
+                        Asset Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Asset Name</Label>
+                          <div className="mt-1 font-medium">{verificationResult.asset.name}</div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Asset Type</Label>
+                          <div className="mt-1">{verificationResult.asset.type}</div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Declared Value</Label>
+                          <div className="mt-1 font-medium">
+                            {formatCurrency(verificationResult.asset.declared_value, verificationResult.asset.currency)}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Hash Verification */}
+                {verificationResult.hash_available && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Hash className="h-5 w-5" />
+                        Digital Hash Verification
+                      </CardTitle>
+                      <CardDescription>
+                        Verify the document's digital signature for additional security
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {!showHashInput ? (
+                        <div className="text-center">
+                          <Button 
+                            onClick={() => setShowHashInput(true)}
+                            variant="outline"
+                            className="flex items-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            Verify Digital Hash
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="hash">Enter Digital Hash</Label>
+                            <Input
+                              id="hash"
+                              value={hashInput}
+                              onChange={(e) => setHashInput(e.target.value)}
+                              placeholder="Enter the digital hash from the original document"
+                              className="font-mono text-sm"
+                            />
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button 
+                              onClick={handleHashVerification}
+                              disabled={!hashInput.trim() || verifyingHash}
+                              className="flex items-center gap-2"
+                            >
+                              {verifyingHash ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Shield className="h-4 w-4" />
+                              )}
+                              {verifyingHash ? 'Verifying...' : 'Verify Hash'}
+                            </Button>
+                            
+                            <Button 
+                              variant="outline"
+                              onClick={() => {
+                                setShowHashInput(false)
+                                setHashInput('')
+                              }}
+                            >
+                              <EyeOff className="h-4 w-4 mr-2" />
+                              Hide
+                            </Button>
+                          </div>
+                          
+                          {verificationResult.hash_provided !== undefined && (
+                            <div className={`p-3 rounded-lg ${
+                              verificationResult.hash_valid 
+                                ? 'bg-green-50 border border-green-200' 
+                                : 'bg-red-50 border border-red-200'
+                            }`}>
+                              <div className="flex items-center">
+                                {verificationResult.hash_valid ? (
+                                  <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                                ) : (
+                                  <XCircle className="h-5 w-5 text-red-600 mr-2" />
+                                )}
+                                <span className={`text-sm font-medium ${
+                                  verificationResult.hash_valid ? 'text-green-800' : 'text-red-800'
+                                }`}>
+                                  {verificationResult.hash_valid 
+                                    ? 'Hash verification successful - Document is authentic'
+                                    : 'Hash verification failed - Document may have been modified'
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="text-center mt-12 text-sm text-gray-500">
+          <p>© 2024 G1 Holding. All rights reserved.</p>
+          <p className="mt-1">
+            For questions about this verification, please contact: 
+            <a href="mailto:verify@g1holding.com" className="text-blue-600 hover:underline ml-1">
+              verify@g1holding.com
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

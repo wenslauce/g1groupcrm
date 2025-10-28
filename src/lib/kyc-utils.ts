@@ -1,1 +1,340 @@
-import { KYCDocumentStatus, DocumentType, RiskLevel } from '@/types'\n\nexport const kycUtils = {\n  // Document type utilities\n  getDocumentTypeDisplayName(type: DocumentType): string {\n    const typeNames: Record<DocumentType, string> = {\n      passport: 'Passport',\n      national_id: 'National ID',\n      drivers_license: 'Driver\\'s License',\n      utility_bill: 'Utility Bill',\n      bank_statement: 'Bank Statement',\n      proof_of_address: 'Proof of Address',\n      business_registration: 'Business Registration',\n      articles_of_incorporation: 'Articles of Incorporation',\n      tax_certificate: 'Tax Certificate',\n      other: 'Other'\n    }\n    return typeNames[type]\n  },\n\n  getAllDocumentTypes(): { value: DocumentType; label: string; category: string }[] {\n    return [\n      { value: 'passport', label: 'Passport', category: 'Identity' },\n      { value: 'national_id', label: 'National ID', category: 'Identity' },\n      { value: 'drivers_license', label: 'Driver\\'s License', category: 'Identity' },\n      { value: 'utility_bill', label: 'Utility Bill', category: 'Address' },\n      { value: 'bank_statement', label: 'Bank Statement', category: 'Financial' },\n      { value: 'proof_of_address', label: 'Proof of Address', category: 'Address' },\n      { value: 'business_registration', label: 'Business Registration', category: 'Business' },\n      { value: 'articles_of_incorporation', label: 'Articles of Incorporation', category: 'Business' },\n      { value: 'tax_certificate', label: 'Tax Certificate', category: 'Financial' },\n      { value: 'other', label: 'Other', category: 'Other' }\n    ]\n  },\n\n  // Status utilities\n  getKYCStatusDisplayName(status: KYCDocumentStatus): string {\n    const statusNames: Record<KYCDocumentStatus, string> = {\n      pending: 'Pending Review',\n      approved: 'Approved',\n      rejected: 'Rejected',\n      under_review: 'Under Review'\n    }\n    return statusNames[status]\n  },\n\n  getKYCStatusColor(status: KYCDocumentStatus): string {\n    const statusColors: Record<KYCDocumentStatus, string> = {\n      pending: 'bg-yellow-100 text-yellow-800',\n      approved: 'bg-green-100 text-green-800',\n      rejected: 'bg-red-100 text-red-800',\n      under_review: 'bg-blue-100 text-blue-800'\n    }\n    return statusColors[status]\n  },\n\n  getAllKYCStatuses(): { value: KYCDocumentStatus; label: string }[] {\n    return [\n      { value: 'pending', label: 'Pending Review' },\n      { value: 'under_review', label: 'Under Review' },\n      { value: 'approved', label: 'Approved' },\n      { value: 'rejected', label: 'Rejected' }\n    ]\n  },\n\n  // Risk assessment utilities\n  calculateRiskScore(factors: Array<{ score: number; weight: number }>): number {\n    if (factors.length === 0) return 0\n    \n    const weightedSum = factors.reduce((sum, factor) => {\n      return sum + (factor.score * factor.weight)\n    }, 0)\n    \n    const totalWeight = factors.reduce((sum, factor) => sum + factor.weight, 0)\n    \n    return totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 10) : 0\n  },\n\n  getRiskLevelFromScore(score: number): RiskLevel {\n    if (score <= 30) return 'low'\n    if (score <= 70) return 'medium'\n    return 'high'\n  },\n\n  getRiskLevelColor(level: RiskLevel): string {\n    const colors: Record<RiskLevel, string> = {\n      low: 'bg-green-100 text-green-800',\n      medium: 'bg-yellow-100 text-yellow-800',\n      high: 'bg-red-100 text-red-800'\n    }\n    return colors[level]\n  },\n\n  // Document validation\n  validateDocumentExpiry(expiryDate: string): boolean {\n    const expiry = new Date(expiryDate)\n    const now = new Date()\n    const threeMonthsFromNow = new Date()\n    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)\n    \n    return expiry > threeMonthsFromNow\n  },\n\n  isDocumentExpiringSoon(expiryDate: string, daysThreshold: number = 90): boolean {\n    const expiry = new Date(expiryDate)\n    const now = new Date()\n    const threshold = new Date()\n    threshold.setDate(threshold.getDate() + daysThreshold)\n    \n    return expiry <= threshold && expiry > now\n  },\n\n  isDocumentExpired(expiryDate: string): boolean {\n    const expiry = new Date(expiryDate)\n    const now = new Date()\n    return expiry <= now\n  },\n\n  // File validation\n  validateFileType(fileName: string, allowedTypes: string[]): boolean {\n    const extension = fileName.split('.').pop()?.toLowerCase()\n    return extension ? allowedTypes.includes(extension) : false\n  },\n\n  validateFileSize(fileSize: number, maxSizeMB: number = 10): boolean {\n    const maxSizeBytes = maxSizeMB * 1024 * 1024\n    return fileSize <= maxSizeBytes\n  },\n\n  getAllowedFileTypes(): string[] {\n    return ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']\n  },\n\n  getMaxFileSize(): number {\n    return 10 // MB\n  },\n\n  // Compliance workflow\n  getRequiredDocumentsForClientType(clientType: string): DocumentType[] {\n    const requirements: Record<string, DocumentType[]> = {\n      individual: ['passport', 'proof_of_address'],\n      corporate: ['business_registration', 'articles_of_incorporation', 'proof_of_address'],\n      institutional: ['business_registration', 'articles_of_incorporation', 'tax_certificate']\n    }\n    \n    return requirements[clientType] || []\n  },\n\n  calculateComplianceCompleteness(clientType: string, submittedDocuments: DocumentType[]): number {\n    const required = this.getRequiredDocumentsForClientType(clientType)\n    if (required.length === 0) return 100\n    \n    const submitted = submittedDocuments.filter(doc => required.includes(doc))\n    return Math.round((submitted.length / required.length) * 100)\n  },\n\n  // Risk factors\n  getStandardRiskFactors(): Array<{ factor: string; description: string; maxScore: number }> {\n    return [\n      {\n        factor: 'Geographic Risk',\n        description: 'Risk based on client\\'s country of residence/operation',\n        maxScore: 10\n      },\n      {\n        factor: 'Business Type Risk',\n        description: 'Risk associated with client\\'s business activities',\n        maxScore: 10\n      },\n      {\n        factor: 'Transaction Volume',\n        description: 'Risk based on expected transaction volumes',\n        maxScore: 10\n      },\n      {\n        factor: 'Source of Funds',\n        description: 'Risk related to the source of client\\'s funds',\n        maxScore: 10\n      },\n      {\n        factor: 'PEP Status',\n        description: 'Politically Exposed Person status',\n        maxScore: 10\n      },\n      {\n        factor: 'Sanctions Screening',\n        description: 'Results of sanctions list screening',\n        maxScore: 10\n      },\n      {\n        factor: 'Media Coverage',\n        description: 'Negative media coverage or adverse information',\n        maxScore: 10\n      },\n      {\n        factor: 'Document Quality',\n        description: 'Quality and authenticity of submitted documents',\n        maxScore: 10\n      }\n    ]\n  },\n\n  // Compliance flags\n  getComplianceFlags(): Array<{ flag: string; description: string; severity: 'low' | 'medium' | 'high' }> {\n    return [\n      {\n        flag: 'INCOMPLETE_DOCUMENTATION',\n        description: 'Required documents are missing or incomplete',\n        severity: 'medium'\n      },\n      {\n        flag: 'EXPIRED_DOCUMENTS',\n        description: 'One or more documents have expired',\n        severity: 'high'\n      },\n      {\n        flag: 'HIGH_RISK_JURISDICTION',\n        description: 'Client is from a high-risk jurisdiction',\n        severity: 'high'\n      },\n      {\n        flag: 'PEP_IDENTIFIED',\n        description: 'Client identified as Politically Exposed Person',\n        severity: 'high'\n      },\n      {\n        flag: 'SANCTIONS_MATCH',\n        description: 'Potential match found in sanctions screening',\n        severity: 'high'\n      },\n      {\n        flag: 'ADVERSE_MEDIA',\n        description: 'Negative media coverage identified',\n        severity: 'medium'\n      },\n      {\n        flag: 'INCONSISTENT_INFORMATION',\n        description: 'Inconsistencies found in provided information',\n        severity: 'medium'\n      },\n      {\n        flag: 'UNUSUAL_TRANSACTION_PATTERN',\n        description: 'Unusual or suspicious transaction patterns',\n        severity: 'high'\n      }\n    ]\n  },\n\n  // Review workflow\n  canTransitionKYCStatus(currentStatus: KYCDocumentStatus, newStatus: KYCDocumentStatus): boolean {\n    const allowedTransitions: Record<KYCDocumentStatus, KYCDocumentStatus[]> = {\n      pending: ['under_review', 'approved', 'rejected'],\n      under_review: ['approved', 'rejected', 'pending'],\n      approved: ['under_review'], // Can be re-reviewed if needed\n      rejected: ['under_review', 'pending'] // Can be resubmitted\n    }\n    \n    return allowedTransitions[currentStatus]?.includes(newStatus) || false\n  },\n\n  // Reporting utilities\n  generateComplianceReport(documents: any[], assessments: any[]) {\n    const totalDocuments = documents.length\n    const approvedDocuments = documents.filter(doc => doc.status === 'approved').length\n    const rejectedDocuments = documents.filter(doc => doc.status === 'rejected').length\n    const pendingDocuments = documents.filter(doc => doc.status === 'pending' || doc.status === 'under_review').length\n    \n    const averageRiskScore = assessments.length > 0 \n      ? assessments.reduce((sum, assessment) => sum + assessment.overall_risk_score, 0) / assessments.length\n      : 0\n    \n    const riskDistribution = {\n      low: assessments.filter(a => a.risk_level === 'low').length,\n      medium: assessments.filter(a => a.risk_level === 'medium').length,\n      high: assessments.filter(a => a.risk_level === 'high').length\n    }\n    \n    return {\n      totalDocuments,\n      approvedDocuments,\n      rejectedDocuments,\n      pendingDocuments,\n      approvalRate: totalDocuments > 0 ? (approvedDocuments / totalDocuments) * 100 : 0,\n      averageRiskScore: Math.round(averageRiskScore),\n      riskDistribution\n    }\n  },\n\n  // Notification utilities\n  getKYCNotificationMessage(status: KYCDocumentStatus, documentType: DocumentType): string {\n    const docName = this.getDocumentTypeDisplayName(documentType)\n    \n    switch (status) {\n      case 'approved':\n        return `Your ${docName} has been approved and is now compliant.`\n      case 'rejected':\n        return `Your ${docName} has been rejected. Please review the feedback and resubmit.`\n      case 'under_review':\n        return `Your ${docName} is currently under review by our compliance team.`\n      default:\n        return `Your ${docName} has been received and is pending review.`\n    }\n  },\n\n  // Due diligence levels\n  getDueDiligenceLevel(riskScore: number, clientType: string): 'standard' | 'enhanced' | 'simplified' {\n    if (riskScore >= 70) return 'enhanced'\n    if (riskScore <= 30 && clientType === 'individual') return 'simplified'\n    return 'standard'\n  },\n\n  getRequiredDueDiligenceMeasures(level: 'standard' | 'enhanced' | 'simplified'): string[] {\n    const measures: Record<string, string[]> = {\n      simplified: [\n        'Basic identity verification',\n        'Address verification',\n        'Basic sanctions screening'\n      ],\n      standard: [\n        'Identity verification',\n        'Address verification',\n        'Source of funds verification',\n        'Sanctions and PEP screening',\n        'Business purpose assessment'\n      ],\n      enhanced: [\n        'Enhanced identity verification',\n        'Enhanced address verification',\n        'Detailed source of funds verification',\n        'Enhanced sanctions and PEP screening',\n        'Adverse media screening',\n        'Senior management approval',\n        'Ongoing monitoring',\n        'Additional documentation requirements'\n      ]\n    }\n    \n    return measures[level] || measures.standard\n  }\n}"
+import { KYCDocumentStatus, DocumentType, RiskLevel } from '@/types'
+
+export const kycUtils = {
+  // Document type utilities
+  getDocumentTypeDisplayName(type: DocumentType): string {
+    const typeNames: Record<DocumentType, string> = {
+      passport: 'Passport',
+      national_id: 'National ID',
+      drivers_license: 'Driver\'s License',
+      utility_bill: 'Utility Bill',
+      bank_statement: 'Bank Statement',
+      proof_of_address: 'Proof of Address',
+      business_registration: 'Business Registration',
+      articles_of_incorporation: 'Articles of Incorporation',
+      tax_certificate: 'Tax Certificate',
+      other: 'Other'
+    }
+    return typeNames[type]
+  },
+
+  getAllDocumentTypes(): { value: DocumentType; label: string; category: string }[] {
+    return [
+      { value: 'passport', label: 'Passport', category: 'Identity' },
+      { value: 'national_id', label: 'National ID', category: 'Identity' },
+      { value: 'drivers_license', label: 'Driver\'s License', category: 'Identity' },
+      { value: 'utility_bill', label: 'Utility Bill', category: 'Address' },
+      { value: 'bank_statement', label: 'Bank Statement', category: 'Financial' },
+      { value: 'proof_of_address', label: 'Proof of Address', category: 'Address' },
+      { value: 'business_registration', label: 'Business Registration', category: 'Business' },
+      { value: 'articles_of_incorporation', label: 'Articles of Incorporation', category: 'Business' },
+      { value: 'tax_certificate', label: 'Tax Certificate', category: 'Financial' },
+      { value: 'other', label: 'Other', category: 'Other' }
+    ]
+  },
+
+  // Status utilities
+  getKYCStatusDisplayName(status: KYCDocumentStatus): string {
+    const statusNames: Record<KYCDocumentStatus, string> = {
+      pending: 'Pending Review',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      under_review: 'Under Review'
+    }
+    return statusNames[status]
+  },
+
+  getKYCStatusColor(status: KYCDocumentStatus): string {
+    const statusColors: Record<KYCDocumentStatus, string> = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      approved: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800',
+      under_review: 'bg-blue-100 text-blue-800'
+    }
+    return statusColors[status]
+  },
+
+  getAllKYCStatuses(): { value: KYCDocumentStatus; label: string }[] {
+    return [
+      { value: 'pending', label: 'Pending Review' },
+      { value: 'under_review', label: 'Under Review' },
+      { value: 'approved', label: 'Approved' },
+      { value: 'rejected', label: 'Rejected' }
+    ]
+  },
+
+  // Risk assessment utilities
+  calculateRiskScore(factors: Array<{ score: number; weight: number }>): number {
+    if (factors.length === 0) return 0
+    
+    const weightedSum = factors.reduce((sum, factor) => {
+      return sum + (factor.score * factor.weight)
+    }, 0)
+    
+    const totalWeight = factors.reduce((sum, factor) => sum + factor.weight, 0)
+    
+    return totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 10) : 0
+  },
+
+  getRiskLevelFromScore(score: number): RiskLevel {
+    if (score <= 30) return 'low'
+    if (score <= 70) return 'medium'
+    return 'high'
+  },
+
+  getRiskLevelColor(level: RiskLevel): string {
+    const colors: Record<RiskLevel, string> = {
+      low: 'bg-green-100 text-green-800',
+      medium: 'bg-yellow-100 text-yellow-800',
+      high: 'bg-red-100 text-red-800'
+    }
+    return colors[level]
+  },
+
+  // Document validation
+  validateDocumentExpiry(expiryDate: string): boolean {
+    const expiry = new Date(expiryDate)
+    const now = new Date()
+    const threeMonthsFromNow = new Date()
+    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3)
+    
+    return expiry > threeMonthsFromNow
+  },
+
+  isDocumentExpiringSoon(expiryDate: string, daysThreshold: number = 90): boolean {
+    const expiry = new Date(expiryDate)
+    const now = new Date()
+    const threshold = new Date()
+    threshold.setDate(threshold.getDate() + daysThreshold)
+    
+    return expiry <= threshold && expiry > now
+  },
+
+  isDocumentExpired(expiryDate: string): boolean {
+    const expiry = new Date(expiryDate)
+    const now = new Date()
+    return expiry <= now
+  },
+
+  // File validation
+  validateFileType(fileName: string, allowedTypes: string[]): boolean {
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    return extension ? allowedTypes.includes(extension) : false
+  },
+
+  validateFileSize(fileSize: number, maxSizeMB: number = 10): boolean {
+    const maxSizeBytes = maxSizeMB * 1024 * 1024
+    return fileSize <= maxSizeBytes
+  },
+
+  getAllowedFileTypes(): string[] {
+    return ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']
+  },
+
+  getMaxFileSize(): number {
+    return 10 // MB
+  },
+
+  // Compliance workflow
+  getRequiredDocumentsForClientType(clientType: string): DocumentType[] {
+    const requirements: Record<string, DocumentType[]> = {
+      individual: ['passport', 'proof_of_address'],
+      corporate: ['business_registration', 'articles_of_incorporation', 'proof_of_address'],
+      institutional: ['business_registration', 'articles_of_incorporation', 'tax_certificate']
+    }
+    
+    return requirements[clientType] || []
+  },
+
+  calculateComplianceCompleteness(clientType: string, submittedDocuments: DocumentType[]): number {
+    const required = this.getRequiredDocumentsForClientType(clientType)
+    if (required.length === 0) return 100
+    
+    const submitted = submittedDocuments.filter(doc => required.includes(doc))
+    return Math.round((submitted.length / required.length) * 100)
+  },
+
+  // Risk factors
+  getStandardRiskFactors(): Array<{ factor: string; description: string; maxScore: number }> {
+    return [
+      {
+        factor: 'Geographic Risk',
+        description: 'Risk based on client\'s country of residence/operation',
+        maxScore: 10
+      },
+      {
+        factor: 'Business Type Risk',
+        description: 'Risk associated with client\'s business activities',
+        maxScore: 10
+      },
+      {
+        factor: 'Transaction Volume',
+        description: 'Risk based on expected transaction volumes',
+        maxScore: 10
+      },
+      {
+        factor: 'Source of Funds',
+        description: 'Risk related to the source of client\'s funds',
+        maxScore: 10
+      },
+      {
+        factor: 'PEP Status',
+        description: 'Politically Exposed Person status',
+        maxScore: 10
+      },
+      {
+        factor: 'Sanctions Screening',
+        description: 'Results of sanctions list screening',
+        maxScore: 10
+      },
+      {
+        factor: 'Media Coverage',
+        description: 'Negative media coverage or adverse information',
+        maxScore: 10
+      },
+      {
+        factor: 'Document Quality',
+        description: 'Quality and authenticity of submitted documents',
+        maxScore: 10
+      }
+    ]
+  },
+
+  // Compliance flags
+  getComplianceFlags(): Array<{ flag: string; description: string; severity: 'low' | 'medium' | 'high' }> {
+    return [
+      {
+        flag: 'INCOMPLETE_DOCUMENTATION',
+        description: 'Required documents are missing or incomplete',
+        severity: 'medium'
+      },
+      {
+        flag: 'EXPIRED_DOCUMENTS',
+        description: 'One or more documents have expired',
+        severity: 'high'
+      },
+      {
+        flag: 'HIGH_RISK_JURISDICTION',
+        description: 'Client is from a high-risk jurisdiction',
+        severity: 'high'
+      },
+      {
+        flag: 'PEP_IDENTIFIED',
+        description: 'Client identified as Politically Exposed Person',
+        severity: 'high'
+      },
+      {
+        flag: 'SANCTIONS_MATCH',
+        description: 'Potential match found in sanctions screening',
+        severity: 'high'
+      },
+      {
+        flag: 'ADVERSE_MEDIA',
+        description: 'Negative media coverage identified',
+        severity: 'medium'
+      },
+      {
+        flag: 'INCONSISTENT_INFORMATION',
+        description: 'Inconsistencies found in provided information',
+        severity: 'medium'
+      },
+      {
+        flag: 'UNUSUAL_TRANSACTION_PATTERN',
+        description: 'Unusual or suspicious transaction patterns',
+        severity: 'high'
+      }
+    ]
+  },
+
+  // Review workflow
+  canTransitionKYCStatus(currentStatus: KYCDocumentStatus, newStatus: KYCDocumentStatus): boolean {
+    const allowedTransitions: Record<KYCDocumentStatus, KYCDocumentStatus[]> = {
+      pending: ['under_review', 'approved', 'rejected'],
+      under_review: ['approved', 'rejected', 'pending'],
+      approved: ['under_review'], // Can be re-reviewed if needed
+      rejected: ['under_review', 'pending'] // Can be resubmitted
+    }
+    
+    return allowedTransitions[currentStatus]?.includes(newStatus) || false
+  },
+
+  // Reporting utilities
+  generateComplianceReport(documents: any[], assessments: any[]) {
+    const totalDocuments = documents.length
+    const approvedDocuments = documents.filter(doc => doc.status === 'approved').length
+    const rejectedDocuments = documents.filter(doc => doc.status === 'rejected').length
+    const pendingDocuments = documents.filter(doc => doc.status === 'pending' || doc.status === 'under_review').length
+    
+    const averageRiskScore = assessments.length > 0 
+      ? assessments.reduce((sum, assessment) => sum + assessment.overall_risk_score, 0) / assessments.length
+      : 0
+    
+    const riskDistribution = {
+      low: assessments.filter(a => a.risk_level === 'low').length,
+      medium: assessments.filter(a => a.risk_level === 'medium').length,
+      high: assessments.filter(a => a.risk_level === 'high').length
+    }
+    
+    return {
+      totalDocuments,
+      approvedDocuments,
+      rejectedDocuments,
+      pendingDocuments,
+      approvalRate: totalDocuments > 0 ? (approvedDocuments / totalDocuments) * 100 : 0,
+      averageRiskScore: Math.round(averageRiskScore),
+      riskDistribution
+    }
+  },
+
+  // Notification utilities
+  getKYCNotificationMessage(status: KYCDocumentStatus, documentType: DocumentType): string {
+    const docName = this.getDocumentTypeDisplayName(documentType)
+    
+    switch (status) {
+      case 'approved':
+        return `Your ${docName} has been approved and is now compliant.`
+      case 'rejected':
+        return `Your ${docName} has been rejected. Please review the feedback and resubmit.`
+      case 'under_review':
+        return `Your ${docName} is currently under review by our compliance team.`
+      default:
+        return `Your ${docName} has been received and is pending review.`
+    }
+  },
+
+  // Due diligence levels
+  getDueDiligenceLevel(riskScore: number, clientType: string): 'standard' | 'enhanced' | 'simplified' {
+    if (riskScore >= 70) return 'enhanced'
+    if (riskScore <= 30 && clientType === 'individual') return 'simplified'
+    return 'standard'
+  },
+
+  getRequiredDueDiligenceMeasures(level: 'standard' | 'enhanced' | 'simplified'): string[] {
+    const measures: Record<string, string[]> = {
+      simplified: [
+        'Basic identity verification',
+        'Address verification',
+        'Basic sanctions screening'
+      ],
+      standard: [
+        'Identity verification',
+        'Address verification',
+        'Source of funds verification',
+        'Sanctions and PEP screening',
+        'Business purpose assessment'
+      ],
+      enhanced: [
+        'Enhanced identity verification',
+        'Enhanced address verification',
+        'Detailed source of funds verification',
+        'Enhanced sanctions and PEP screening',
+        'Adverse media screening',
+        'Senior management approval',
+        'Ongoing monitoring',
+        'Additional documentation requirements'
+      ]
+    }
+    
+    return measures[level] || measures.standard
+  }
+}

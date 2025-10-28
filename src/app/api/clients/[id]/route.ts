@@ -126,7 +126,9 @@ export async function DELETE(
       .eq('id', params.id)
       .single()
     
-    if (associations?.skrs?.[0]?.count > 0 || associations?.invoices?.[0]?.count > 0) {
+    const skrCount = Array.isArray(associations?.skrs) ? (associations?.skrs?.[0]?.count ?? 0) : 0
+    const invoiceCount = Array.isArray(associations?.invoices) ? (associations?.invoices?.[0]?.count ?? 0) : 0
+    if (skrCount > 0 || invoiceCount > 0) {
       return NextResponse.json(
         { error: 'Cannot delete client with existing SKRs or invoices' },
         { status: 400 }

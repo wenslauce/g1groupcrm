@@ -34,8 +34,19 @@ export const complianceAnalyticsSchema = z.object({
   group_by: z.enum(['status', 'risk_level', 'type', 'country', 'date']).optional()
 })
 
+// General analytics filters schema
+export const analyticsFiltersSchema = z.object({
+  date_range: z.object({
+    start_date: z.string().datetime(),
+    end_date: z.string().datetime()
+  }).optional(),
+  currency: z.string().optional(),
+  group_by: z.enum(['day', 'week', 'month', 'quarter', 'year']).default('month')
+})
+
 // Export types
 export type SKRAnalyticsFilters = z.infer<typeof skrAnalyticsSchema>
 export type FinancialAnalyticsFilters = z.infer<typeof financialAnalyticsSchema>
 export type ComplianceAnalyticsFilters = z.infer<typeof complianceAnalyticsSchema>
+export type AnalyticsFilters = z.infer<typeof analyticsFiltersSchema>
 

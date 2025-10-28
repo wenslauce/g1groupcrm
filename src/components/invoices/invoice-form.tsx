@@ -1,1 +1,586 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { useRouter } from 'next/navigation'\nimport { Button } from '@/components/ui/button'\nimport { Input } from '@/components/ui/input'\nimport { Label } from '@/components/ui/label'\nimport { Textarea } from '@/components/ui/textarea'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'\nimport { Badge } from '@/components/ui/badge'\nimport { \n  Save, \n  X, \n  Plus, \n  Trash2, \n  Loader2, \n  FileText, \n  User, \n  Package,\n  Calculator,\n  Calendar\n} from 'lucide-react'\nimport { InvoiceWithRelations, ClientWithRelations, SKRWithRelations } from '@/types'\nimport { InvoiceFormData, InvoiceItem } from '@/lib/validations/financial'\nimport { financialUtils } from '@/lib/financial-utils'\nimport { formatCurrency } from '@/lib/utils'\n\ninterface InvoiceFormProps {\n  invoice?: InvoiceWithRelations | null\n  onSave?: () => void\n  onCancel?: () => void\n}\n\nexport function InvoiceForm({ invoice, onSave, onCancel }: InvoiceFormProps) {\n  const [formData, setFormData] = useState<InvoiceFormData>({\n    client_id: '',\n    skr_id: undefined,\n    amount: 0,\n    currency: 'USD',\n    due_date: undefined,\n    description: '',\n    items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],\n    tax_rate: 0,\n    discount_amount: 0,\n    notes: '',\n    metadata: {}\n  })\n  const [clients, setClients] = useState<ClientWithRelations[]>([])\n  const [skrs, setSKRs] = useState<SKRWithRelations[]>([])\n  const [selectedClient, setSelectedClient] = useState<ClientWithRelations | null>(null)\n  const [selectedSKR, setSelectedSKR] = useState<SKRWithRelations | null>(null)\n  const [isLoading, setIsLoading] = useState(false)\n  const [isLoadingClients, setIsLoadingClients] = useState(true)\n  const [isLoadingSKRs, setIsLoadingSKRs] = useState(false)\n  const [error, setError] = useState('')\n  const [success, setSuccess] = useState('')\n  \n  const router = useRouter()\n  const isEditing = !!invoice\n\n  useEffect(() => {\n    fetchClients()\n    \n    if (invoice) {\n      setFormData({\n        client_id: invoice.client_id || '',\n        skr_id: invoice.skr_id || undefined,\n        amount: invoice.amount || 0,\n        currency: invoice.currency || 'USD',\n        due_date: invoice.due_date || undefined,\n        description: invoice.description || '',\n        items: invoice.items || [{ description: '', quantity: 1, unit_price: 0, total: 0 }],\n        tax_rate: invoice.tax_rate || 0,\n        discount_amount: invoice.discount_amount || 0,\n        notes: invoice.notes || '',\n        metadata: invoice.metadata || {}\n      })\n      \n      if (invoice.client_id) {\n        fetchSKRs(invoice.client_id)\n      }\n    }\n  }, [invoice])\n\n  const fetchClients = async () => {\n    setIsLoadingClients(true)\n    try {\n      const response = await fetch('/api/clients?limit=100')\n      const result = await response.json()\n      \n      if (response.ok) {\n        // Only show approved clients\n        const approvedClients = result.data.filter(\n          (client: ClientWithRelations) => client.compliance_status === 'approved'\n        )\n        setClients(approvedClients)\n        \n        if (invoice?.client) {\n          setSelectedClient(invoice.client)\n        }\n      }\n    } catch (error) {\n      console.error('Failed to fetch clients:', error)\n    } finally {\n      setIsLoadingClients(false)\n    }\n  }\n\n  const fetchSKRs = async (clientId: string) => {\n    setIsLoadingSKRs(true)\n    try {\n      const response = await fetch(`/api/skrs?client_id=${clientId}&limit=100`)\n      const result = await response.json()\n      \n      if (response.ok) {\n        setSKRs(result.data)\n        \n        if (invoice?.skr) {\n          setSelectedSKR(invoice.skr)\n        }\n      }\n    } catch (error) {\n      console.error('Failed to fetch SKRs:', error)\n    } finally {\n      setIsLoadingSKRs(false)\n    }\n  }\n\n  const handleClientChange = (clientId: string) => {\n    setFormData(prev => ({ ...prev, client_id: clientId, skr_id: undefined }))\n    setSelectedSKR(null)\n    \n    const client = clients.find(c => c.id === clientId)\n    setSelectedClient(client || null)\n    \n    if (clientId) {\n      fetchSKRs(clientId)\n    } else {\n      setSKRs([])\n    }\n  }\n\n  const handleSKRChange = (skrId: string) => {\n    setFormData(prev => ({ ...prev, skr_id: skrId || undefined }))\n    \n    const skr = skrs.find(s => s.id === skrId)\n    setSelectedSKR(skr || null)\n  }\n\n  const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {\n    const newItems = [...formData.items]\n    newItems[index] = { ...newItems[index], [field]: value }\n    \n    // Recalculate total for this item\n    if (field === 'quantity' || field === 'unit_price') {\n      newItems[index].total = newItems[index].quantity * newItems[index].unit_price\n    }\n    \n    setFormData(prev => ({ ...prev, items: newItems }))\n    recalculateTotal(newItems)\n  }\n\n  const addItem = () => {\n    const newItems = [...formData.items, { description: '', quantity: 1, unit_price: 0, total: 0 }]\n    setFormData(prev => ({ ...prev, items: newItems }))\n  }\n\n  const removeItem = (index: number) => {\n    if (formData.items.length > 1) {\n      const newItems = formData.items.filter((_, i) => i !== index)\n      setFormData(prev => ({ ...prev, items: newItems }))\n      recalculateTotal(newItems)\n    }\n  }\n\n  const recalculateTotal = (items: InvoiceItem[]) => {\n    const total = financialUtils.calculateInvoiceTotal(items, formData.tax_rate, formData.discount_amount)\n    setFormData(prev => ({ ...prev, amount: total }))\n  }\n\n  const handleTaxRateChange = (taxRate: number) => {\n    setFormData(prev => ({ ...prev, tax_rate: taxRate }))\n    recalculateTotal(formData.items)\n  }\n\n  const handleDiscountChange = (discount: number) => {\n    setFormData(prev => ({ ...prev, discount_amount: discount }))\n    recalculateTotal(formData.items)\n  }\n\n  const handleSubmit = async (e: React.FormEvent) => {\n    e.preventDefault()\n    setIsLoading(true)\n    setError('')\n    setSuccess('')\n\n    try {\n      const url = isEditing ? `/api/invoices/${invoice!.id}` : '/api/invoices'\n      const method = isEditing ? 'PUT' : 'POST'\n      \n      const response = await fetch(url, {\n        method,\n        headers: {\n          'Content-Type': 'application/json'\n        },\n        body: JSON.stringify(formData)\n      })\n\n      const result = await response.json()\n\n      if (!response.ok) {\n        throw new Error(result.error || 'Failed to save invoice')\n      }\n\n      setSuccess(`Invoice ${isEditing ? 'updated' : 'created'} successfully!`)\n      \n      if (onSave) {\n        setTimeout(() => onSave(), 1000)\n      } else {\n        setTimeout(() => {\n          router.push('/dashboard/invoices')\n        }, 1000)\n      }\n    } catch (error) {\n      setError(error instanceof Error ? error.message : 'An error occurred')\n    } finally {\n      setIsLoading(false)\n    }\n  }\n\n  const updateFormData = (field: string, value: any) => {\n    setFormData(prev => ({ ...prev, [field]: value }))\n  }\n\n  const subtotal = financialUtils.calculateSubtotal(formData.items)\n  const taxAmount = financialUtils.calculateTaxAmount(subtotal, formData.tax_rate)\n  const total = financialUtils.calculateInvoiceTotal(formData.items, formData.tax_rate, formData.discount_amount)\n\n  return (\n    <Card>\n      <CardHeader>\n        <div className=\"flex items-center justify-between\">\n          <div>\n            <CardTitle className=\"flex items-center gap-2\">\n              <FileText className=\"h-5 w-5\" />\n              {isEditing ? 'Edit Invoice' : 'Create New Invoice'}\n            </CardTitle>\n            <CardDescription>\n              {isEditing \n                ? 'Update invoice information and items'\n                : 'Generate a new invoice for client services'\n              }\n            </CardDescription>\n          </div>\n          {onCancel && (\n            <Button variant=\"ghost\" size=\"icon\" onClick={onCancel}>\n              <X className=\"h-4 w-4\" />\n            </Button>\n          )}\n        </div>\n      </CardHeader>\n      <CardContent>\n        <form onSubmit={handleSubmit} className=\"space-y-6\">\n          {/* Client Selection */}\n          <div className=\"space-y-4\">\n            <div className=\"flex items-center gap-2 mb-4\">\n              <User className=\"h-4 w-4\" />\n              <h3 className=\"text-lg font-medium\">Client Information</h3>\n            </div>\n            \n            <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"client_id\">Client *</Label>\n                <Select\n                  value={formData.client_id}\n                  onValueChange={handleClientChange}\n                  disabled={isLoading || isLoadingClients}\n                >\n                  <SelectTrigger>\n                    <SelectValue placeholder=\"Select a client\" />\n                  </SelectTrigger>\n                  <SelectContent>\n                    {clients.map((client) => (\n                      <SelectItem key={client.id} value={client.id}>\n                        <div className=\"flex items-center gap-2\">\n                          <span>{client.name}</span>\n                          <Badge size=\"sm\">\n                            {client.type}\n                          </Badge>\n                        </div>\n                      </SelectItem>\n                    ))}\n                  </SelectContent>\n                </Select>\n              </div>\n\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"skr_id\">Related SKR (Optional)</Label>\n                <Select\n                  value={formData.skr_id || ''}\n                  onValueChange={handleSKRChange}\n                  disabled={isLoading || isLoadingSKRs || !formData.client_id}\n                >\n                  <SelectTrigger>\n                    <SelectValue placeholder=\"Select an SKR\" />\n                  </SelectTrigger>\n                  <SelectContent>\n                    <SelectItem value=\"\">No SKR</SelectItem>\n                    {skrs.map((skr) => (\n                      <SelectItem key={skr.id} value={skr.id}>\n                        <div className=\"flex flex-col\">\n                          <span className=\"font-medium\">{skr.skr_number}</span>\n                          <span className=\"text-xs text-muted-foreground\">\n                            {skr.asset?.asset_name}\n                          </span>\n                        </div>\n                      </SelectItem>\n                    ))}\n                  </SelectContent>\n                </Select>\n              </div>\n            </div>\n\n            {selectedClient && (\n              <div className=\"p-4 bg-muted rounded-lg\">\n                <h4 className=\"font-medium mb-2\">Client Details</h4>\n                <div className=\"grid grid-cols-1 md:grid-cols-2 gap-2 text-sm\">\n                  <div>\n                    <span className=\"text-muted-foreground\">Email:</span>\n                    <span className=\"ml-2\">{selectedClient.email}</span>\n                  </div>\n                  <div>\n                    <span className=\"text-muted-foreground\">Country:</span>\n                    <span className=\"ml-2\">{selectedClient.country}</span>\n                  </div>\n                </div>\n              </div>\n            )}\n          </div>\n\n          {/* Invoice Details */}\n          <div className=\"space-y-4\">\n            <div className=\"flex items-center gap-2 mb-4\">\n              <FileText className=\"h-4 w-4\" />\n              <h3 className=\"text-lg font-medium\">Invoice Details</h3>\n            </div>\n            \n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"currency\">Currency</Label>\n                <Select\n                  value={formData.currency}\n                  onValueChange={(value) => updateFormData('currency', value)}\n                  disabled={isLoading}\n                >\n                  <SelectTrigger>\n                    <SelectValue />\n                  </SelectTrigger>\n                  <SelectContent>\n                    {financialUtils.getSupportedCurrencies().map((currency) => (\n                      <SelectItem key={currency.code} value={currency.code}>\n                        {currency.code} - {currency.name}\n                      </SelectItem>\n                    ))}\n                  </SelectContent>\n                </Select>\n              </div>\n\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"due_date\">Due Date</Label>\n                <Input\n                  id=\"due_date\"\n                  type=\"datetime-local\"\n                  value={formData.due_date ? new Date(formData.due_date).toISOString().slice(0, 16) : ''}\n                  onChange={(e) => updateFormData('due_date', e.target.value ? new Date(e.target.value).toISOString() : undefined)}\n                  disabled={isLoading}\n                />\n              </div>\n\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"tax_rate\">Tax Rate (%)</Label>\n                <Input\n                  id=\"tax_rate\"\n                  type=\"number\"\n                  step=\"0.01\"\n                  min=\"0\"\n                  max=\"100\"\n                  value={formData.tax_rate * 100}\n                  onChange={(e) => handleTaxRateChange(parseFloat(e.target.value) / 100 || 0)}\n                  disabled={isLoading}\n                />\n              </div>\n            </div>\n\n            <div className=\"space-y-2\">\n              <Label htmlFor=\"description\">Description</Label>\n              <Input\n                id=\"description\"\n                value={formData.description}\n                onChange={(e) => updateFormData('description', e.target.value)}\n                placeholder=\"Brief description of the invoice\"\n                disabled={isLoading}\n              />\n            </div>\n          </div>\n\n          {/* Invoice Items */}\n          <div className=\"space-y-4\">\n            <div className=\"flex items-center justify-between\">\n              <div className=\"flex items-center gap-2\">\n                <Package className=\"h-4 w-4\" />\n                <h3 className=\"text-lg font-medium\">Invoice Items</h3>\n              </div>\n              <Button\n                type=\"button\"\n                variant=\"outline\"\n                size=\"sm\"\n                onClick={addItem}\n                disabled={isLoading}\n              >\n                <Plus className=\"mr-2 h-4 w-4\" />\n                Add Item\n              </Button>\n            </div>\n            \n            <div className=\"space-y-3\">\n              {formData.items.map((item, index) => (\n                <div key={index} className=\"grid grid-cols-12 gap-2 items-end p-4 border rounded-lg\">\n                  <div className=\"col-span-12 md:col-span-4\">\n                    <Label>Description *</Label>\n                    <Input\n                      value={item.description}\n                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}\n                      placeholder=\"Item description\"\n                      disabled={isLoading}\n                    />\n                  </div>\n                  \n                  <div className=\"col-span-4 md:col-span-2\">\n                    <Label>Quantity *</Label>\n                    <Input\n                      type=\"number\"\n                      step=\"0.01\"\n                      min=\"0.01\"\n                      value={item.quantity}\n                      onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}\n                      disabled={isLoading}\n                    />\n                  </div>\n                  \n                  <div className=\"col-span-4 md:col-span-2\">\n                    <Label>Unit Price *</Label>\n                    <Input\n                      type=\"number\"\n                      step=\"0.01\"\n                      min=\"0\"\n                      value={item.unit_price}\n                      onChange={(e) => handleItemChange(index, 'unit_price', parseFloat(e.target.value) || 0)}\n                      disabled={isLoading}\n                    />\n                  </div>\n                  \n                  <div className=\"col-span-3 md:col-span-2\">\n                    <Label>Total</Label>\n                    <div className=\"text-lg font-semibold p-2\">\n                      {formatCurrency(item.total, formData.currency)}\n                    </div>\n                  </div>\n                  \n                  <div className=\"col-span-1 md:col-span-2\">\n                    <Button\n                      type=\"button\"\n                      variant=\"ghost\"\n                      size=\"sm\"\n                      onClick={() => removeItem(index)}\n                      disabled={isLoading || formData.items.length === 1}\n                    >\n                      <Trash2 className=\"h-4 w-4\" />\n                    </Button>\n                  </div>\n                </div>\n              ))}\n            </div>\n          </div>\n\n          {/* Totals */}\n          <div className=\"space-y-4\">\n            <div className=\"flex items-center gap-2 mb-4\">\n              <Calculator className=\"h-4 w-4\" />\n              <h3 className=\"text-lg font-medium\">Totals</h3>\n            </div>\n            \n            <div className=\"grid grid-cols-1 md:grid-cols-2 gap-6\">\n              <div className=\"space-y-2\">\n                <Label htmlFor=\"discount_amount\">Discount Amount</Label>\n                <Input\n                  id=\"discount_amount\"\n                  type=\"number\"\n                  step=\"0.01\"\n                  min=\"0\"\n                  value={formData.discount_amount}\n                  onChange={(e) => handleDiscountChange(parseFloat(e.target.value) || 0)}\n                  disabled={isLoading}\n                />\n              </div>\n              \n              <div className=\"space-y-3\">\n                <div className=\"flex justify-between\">\n                  <span>Subtotal:</span>\n                  <span className=\"font-medium\">{formatCurrency(subtotal, formData.currency)}</span>\n                </div>\n                \n                {formData.tax_rate > 0 && (\n                  <div className=\"flex justify-between\">\n                    <span>Tax ({(formData.tax_rate * 100).toFixed(1)}%):</span>\n                    <span className=\"font-medium\">{formatCurrency(taxAmount, formData.currency)}</span>\n                  </div>\n                )}\n                \n                {formData.discount_amount > 0 && (\n                  <div className=\"flex justify-between\">\n                    <span>Discount:</span>\n                    <span className=\"font-medium\">-{formatCurrency(formData.discount_amount, formData.currency)}</span>\n                  </div>\n                )}\n                \n                <div className=\"flex justify-between text-lg font-bold border-t pt-2\">\n                  <span>Total:</span>\n                  <span>{formatCurrency(total, formData.currency)}</span>\n                </div>\n              </div>\n            </div>\n          </div>\n\n          {/* Notes */}\n          <div className=\"space-y-2\">\n            <Label htmlFor=\"notes\">Notes</Label>\n            <Textarea\n              id=\"notes\"\n              value={formData.notes}\n              onChange={(e) => updateFormData('notes', e.target.value)}\n              placeholder=\"Additional notes or terms\"\n              rows={3}\n              disabled={isLoading}\n            />\n          </div>\n\n          {success && (\n            <div className=\"text-sm text-green-600 bg-green-50 p-3 rounded-md\">\n              {success}\n            </div>\n          )}\n\n          {error && (\n            <div className=\"text-sm text-red-600 bg-red-50 p-3 rounded-md\">\n              {error}\n            </div>\n          )}\n\n          <div className=\"flex justify-end gap-2\">\n            {onCancel && (\n              <Button\n                type=\"button\"\n                variant=\"outline\"\n                onClick={onCancel}\n                disabled={isLoading}\n              >\n                Cancel\n              </Button>\n            )}\n            <Button\n              type=\"submit\"\n              disabled={isLoading || !formData.client_id || formData.items.length === 0}\n              className=\"bg-g1-primary hover:bg-g1-primary/90\"\n            >\n              {isLoading ? (\n                <>\n                  <Loader2 className=\"mr-2 h-4 w-4 animate-spin\" />\n                  {isEditing ? 'Updating...' : 'Creating...'}\n                </>\n              ) : (\n                <>\n                  <Save className=\"mr-2 h-4 w-4\" />\n                  {isEditing ? 'Update Invoice' : 'Create Invoice'}\n                </>\n              )}\n            </Button>\n          </div>\n        </form>\n      </CardContent>\n    </Card>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { formatCurrency } from '@/lib/utils'
+import { Plus, Trash2, Save, ArrowLeft } from 'lucide-react'
+
+interface Client {
+  id: string
+  name: string
+  email: string
+  company_name?: string
+  compliance_status: 'compliant' | 'non_compliant' | 'pending'
+}
+
+interface SKR {
+  id: string
+  skr_number: string
+  client_id: string
+  asset_description: string
+  status: string
+}
+
+interface InvoiceItem {
+  id: string
+  description: string
+  quantity: number
+  unit_price: number
+  total: number
+}
+
+interface InvoiceFormData {
+  client_id: string
+  skr_id?: string
+  due_date: string
+  currency: string
+  notes?: string
+  items: InvoiceItem[]
+}
+
+export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [clients, setClients] = useState<Client[]>([])
+  const [skrs, setSkrs] = useState<SKR[]>([])
+  const [formData, setFormData] = useState<InvoiceFormData>({
+    client_id: '',
+    skr_id: '',
+    due_date: '',
+    currency: 'USD',
+    notes: '',
+    items: [
+      {
+        id: '1',
+        description: '',
+        quantity: 1,
+        unit_price: 0,
+        total: 0
+      }
+    ]
+  })
+
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    fetchClients()
+    if (invoiceId) {
+      fetchInvoice()
+    }
+  }, [invoiceId])
+
+  const fetchClients = async () => {
+    try {
+      const response = await fetch('/api/clients')
+      if (response.ok) {
+        const data = await response.json()
+        setClients(data.clients || [])
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error)
+    }
+  }
+
+  const fetchInvoice = async () => {
+    if (!invoiceId) return
+    
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/invoices/${invoiceId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setFormData({
+          client_id: data.client_id,
+          skr_id: data.skr_id || '',
+          due_date: data.due_date,
+          currency: data.currency,
+          notes: data.notes || '',
+          items: data.items || [
+            {
+              id: '1',
+              description: '',
+              quantity: 1,
+              unit_price: 0,
+              total: 0
+            }
+          ]
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching invoice:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchSKRs = async (clientId: string) => {
+    if (!clientId) {
+      setSkrs([])
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/skrs?client_id=${clientId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setSkrs(data.skrs || [])
+      }
+    } catch (error) {
+      console.error('Error fetching SKRs:', error)
+    }
+  }
+
+  const handleClientChange = (clientId: string) => {
+    setFormData(prev => ({ ...prev, client_id: clientId, skr_id: '' }))
+    fetchSKRs(clientId)
+  }
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }))
+    }
+  }
+
+  const handleItemChange = (itemId: string, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map(item =>
+        item.id === itemId
+          ? { ...item, [field]: value, total: field === 'quantity' || field === 'unit_price' 
+              ? (field === 'quantity' ? value : item.quantity) * (field === 'unit_price' ? value : item.unit_price)
+              : item.total
+            }
+          : item
+      )
+    }))
+  }
+
+  const addItem = () => {
+    const newItem: InvoiceItem = {
+      id: Date.now().toString(),
+      description: '',
+      quantity: 1,
+      unit_price: 0,
+      total: 0
+    }
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, newItem]
+    }))
+  }
+
+  const removeItem = (itemId: string) => {
+    if (formData.items.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        items: prev.items.filter(item => item.id !== itemId)
+      }))
+    }
+  }
+
+  const calculateSubtotal = () => {
+    return formData.items.reduce((sum, item) => sum + item.total, 0)
+  }
+
+  const calculateTax = () => {
+    // Assuming 10% tax rate
+    return calculateSubtotal() * 0.1
+  }
+
+  const calculateTotal = () => {
+    return calculateSubtotal() + calculateTax()
+  }
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.client_id) {
+      newErrors.client_id = 'Client is required'
+    }
+
+    if (!formData.due_date) {
+      newErrors.due_date = 'Due date is required'
+    }
+
+    if (!formData.currency) {
+      newErrors.currency = 'Currency is required'
+    }
+
+    formData.items.forEach((item, index) => {
+      if (!item.description) {
+        newErrors[`item_${index}_description`] = 'Item description is required'
+      }
+      if (item.quantity <= 0) {
+        newErrors[`item_${index}_quantity`] = 'Quantity must be greater than 0'
+      }
+      if (item.unit_price <= 0) {
+        newErrors[`item_${index}_unit_price`] = 'Unit price must be greater than 0'
+      }
+    })
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    try {
+      setSaving(true)
+      
+      const invoiceData = {
+        ...formData,
+        amount: calculateTotal(),
+        subtotal: calculateSubtotal(),
+        tax_amount: calculateTax(),
+        status: 'draft'
+      }
+
+      const url = invoiceId ? `/api/invoices/${invoiceId}` : '/api/invoices'
+      const method = invoiceId ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(invoiceData)
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        router.push(`/dashboard/invoices/${data.id || invoiceId}`)
+      } else {
+        const errorData = await response.json()
+        alert(errorData.error || 'Failed to save invoice')
+      }
+    } catch (error) {
+      console.error('Error saving invoice:', error)
+      alert('Error saving invoice')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading invoice...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="outline"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">
+              {invoiceId ? 'Edit Invoice' : 'Create Invoice'}
+            </h1>
+            <p className="text-gray-600">
+              {invoiceId ? 'Update invoice details' : 'Create a new invoice for a client'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Client and SKR Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Client & SKR Information</CardTitle>
+              <CardDescription>Select the client and optional SKR for this invoice</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="client_id">Client *</Label>
+                <Select
+                  value={formData.client_id}
+                  onValueChange={handleClientChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{client.name}</span>
+                          <Badge 
+                            className={`ml-2 ${
+                              client.compliance_status === 'compliant' 
+                                ? 'bg-green-100 text-green-800' 
+                                : client.compliance_status === 'non_compliant'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {client.compliance_status}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.client_id && (
+                  <p className="text-sm text-red-600 mt-1">{errors.client_id}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="skr_id">SKR (Optional)</Label>
+                <Select
+                  value={formData.skr_id}
+                  onValueChange={(value) => handleInputChange('skr_id', value)}
+                  disabled={!formData.client_id}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an SKR" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {skrs.map((skr) => (
+                      <SelectItem key={skr.id} value={skr.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{skr.skr_number}</span>
+                          <Badge className="ml-2 bg-blue-100 text-blue-800">
+                            {skr.status}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Invoice Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Invoice Details</CardTitle>
+              <CardDescription>Set due date and currency for this invoice</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="due_date">Due Date *</Label>
+                <Input
+                  id="due_date"
+                  type="date"
+                  value={formData.due_date}
+                  onChange={(e) => handleInputChange('due_date', e.target.value)}
+                />
+                {errors.due_date && (
+                  <p className="text-sm text-red-600 mt-1">{errors.due_date}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="currency">Currency *</Label>
+                <Select
+                  value={formData.currency}
+                  onValueChange={(value) => handleInputChange('currency', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select currency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD - US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR - Euro</SelectItem>
+                    <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    <SelectItem value="JPY">JPY - Japanese Yen</SelectItem>
+                    <SelectItem value="CAD">CAD - Canadian Dollar</SelectItem>
+                    <SelectItem value="AUD">AUD - Australian Dollar</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.currency && (
+                  <p className="text-sm text-red-600 mt-1">{errors.currency}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Invoice Items */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Invoice Items</CardTitle>
+                <CardDescription>Add items and services to this invoice</CardDescription>
+              </div>
+              <Button type="button" onClick={addItem}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Unit Price</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {formData.items.map((item, index) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                        placeholder="Item description"
+                      />
+                      {errors[`item_${index}_description`] && (
+                        <p className="text-sm text-red-600 mt-1">
+                          {errors[`item_${index}_description`]}
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                      />
+                      {errors[`item_${index}_quantity`] && (
+                        <p className="text-sm text-red-600 mt-1">
+                          {errors[`item_${index}_quantity`]}
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unit_price}
+                        onChange={(e) => handleItemChange(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                      />
+                      {errors[`item_${index}_unit_price`] && (
+                        <p className="text-sm text-red-600 mt-1">
+                          {errors[`item_${index}_unit_price`]}
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {formatCurrency(item.total, formData.currency)}
+                    </TableCell>
+                    <TableCell>
+                      {formData.items.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeItem(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Notes */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Additional Notes</CardTitle>
+            <CardDescription>Add any additional notes or terms to this invoice</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={formData.notes}
+              onChange={(e) => handleInputChange('notes', e.target.value)}
+              placeholder="Enter any additional notes or terms..."
+              rows={4}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Invoice Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoice Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>{formatCurrency(calculateSubtotal(), formData.currency)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Tax (10%):</span>
+                <span>{formatCurrency(calculateTax(), formData.currency)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg border-t pt-2">
+                <span>Total:</span>
+                <span>{formatCurrency(calculateTotal(), formData.currency)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Actions */}
+        <div className="flex justify-end space-x-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {invoiceId ? 'Update Invoice' : 'Create Invoice'}
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+    </div>
+  )
+}

@@ -1,1 +1,119 @@
-import { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\nimport { skrUtils } from '@/lib/skr-utils'\n\nexport async function GET(\n  request: NextRequest,\n  { params }: { params: { skrNumber: string } }\n) {\n  try {\n    const supabase = createClient()\n    \n    // Decode SKR number (in case it's URL encoded)\n    const skrNumber = decodeURIComponent(params.skrNumber)\n    \n    // Fetch SKR data (public information only)\n    const { data: skr, error } = await supabase\n      .from('skrs')\n      .select(`\n        id,\n        skr_number,\n        status,\n        issue_date,\n        hash,\n        created_at,\n        client:clients(id, name, country),\n        asset:assets(id, asset_name, asset_type, declared_value, currency)\n      `)\n      .eq('skr_number', skrNumber)\n      .single()\n    \n    if (error || !skr) {\n      return NextResponse.json(\n        { \n          valid: false, \n          error: 'SKR not found',\n          skr_number: skrNumber\n        },\n        { status: 404 }\n      )\n    }\n\n    // Only allow verification of issued SKRs\n    if (skr.status !== 'issued' && skr.status !== 'in_transit' && skr.status !== 'delivered' && skr.status !== 'closed') {\n      return NextResponse.json(\n        {\n          valid: false,\n          error: 'SKR is not in a verifiable state',\n          skr_number: skrNumber,\n          status: skr.status\n        },\n        { status: 400 }\n      )\n    }\n\n    // Verify hash if provided in query params\n    const { searchParams } = new URL(request.url)\n    const providedHash = searchParams.get('hash')\n    \n    let hashValid = true\n    if (providedHash && skr.hash) {\n      hashValid = skrUtils.validateSKRHash(skr, providedHash)\n    }\n\n    // Return verification result with public information\n    const verificationResult = {\n      valid: true,\n      skr_number: skr.skr_number,\n      status: skr.status,\n      issue_date: skr.issue_date,\n      hash_valid: hashValid,\n      verification_time: new Date().toISOString(),\n      client: {\n        name: skr.client?.name,\n        country: skr.client?.country\n      },\n      asset: {\n        name: skr.asset?.asset_name,\n        type: skr.asset?.asset_type,\n        declared_value: skr.asset?.declared_value,\n        currency: skr.asset?.currency\n      },\n      // Include hash for verification but don't expose sensitive data\n      hash_provided: !!providedHash,\n      hash_available: !!skr.hash\n    }\n\n    return NextResponse.json(verificationResult, {\n      headers: {\n        'Cache-Control': 'public, max-age=300', // Cache for 5 minutes\n        'Access-Control-Allow-Origin': '*',\n        'Access-Control-Allow-Methods': 'GET',\n        'Access-Control-Allow-Headers': 'Content-Type'\n      }\n    })\n  } catch (error) {\n    console.error('SKR verification error:', error)\n    \n    return NextResponse.json(\n      { \n        valid: false,\n        error: 'Verification service temporarily unavailable',\n        skr_number: params.skrNumber\n      },\n      { status: 500 }\n    )\n  }\n}\n\n// Handle CORS preflight requests\nexport async function OPTIONS() {\n  return new NextResponse(null, {\n    status: 200,\n    headers: {\n      'Access-Control-Allow-Origin': '*',\n      'Access-Control-Allow-Methods': 'GET, OPTIONS',\n      'Access-Control-Allow-Headers': 'Content-Type',\n    },\n  })\n}"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { skrUtils } from '@/lib/skr-utils'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { skrNumber: string } }
+) {
+  try {
+    const supabase = createClient()
+    
+    // Decode SKR number (in case it's URL encoded)
+    const skrNumber = decodeURIComponent(params.skrNumber)
+    
+    // Fetch SKR data (public information only)
+    const { data: skr, error } = await supabase
+      .from('skrs')
+      .select(`
+        id,
+        skr_number,
+        status,
+        issue_date,
+        hash,
+        created_at,
+        client:clients(id, name, country),
+        asset:assets(id, asset_name, asset_type, declared_value, currency)
+      `)
+      .eq('skr_number', skrNumber)
+      .single()
+    
+    if (error || !skr) {
+      return NextResponse.json(
+        { 
+          valid: false, 
+          error: 'SKR not found',
+          skr_number: skrNumber
+        },
+        { status: 404 }
+      )
+    }
+
+    // Only allow verification of issued SKRs
+    if (skr.status !== 'issued' && skr.status !== 'in_transit' && skr.status !== 'delivered' && skr.status !== 'closed') {
+      return NextResponse.json(
+        {
+          valid: false,
+          error: 'SKR is not in a verifiable state',
+          skr_number: skrNumber,
+          status: skr.status
+        },
+        { status: 400 }
+      )
+    }
+
+    // Verify hash if provided in query params
+    const { searchParams } = new URL(request.url)
+    const providedHash = searchParams.get('hash')
+    
+    let hashValid = true
+    if (providedHash && skr.hash) {
+      hashValid = skrUtils.validateSKRHash(skr, providedHash)
+    }
+
+    // Return verification result with public information
+    const verificationResult = {
+      valid: true,
+      skr_number: skr.skr_number,
+      status: skr.status,
+      issue_date: skr.issue_date,
+      hash_valid: hashValid,
+      verification_time: new Date().toISOString(),
+      client: {
+        name: skr.client?.name,
+        country: skr.client?.country
+      },
+      asset: {
+        name: skr.asset?.asset_name,
+        type: skr.asset?.asset_type,
+        declared_value: skr.asset?.declared_value,
+        currency: skr.asset?.currency
+      },
+      // Include hash for verification but don't expose sensitive data
+      hash_provided: !!providedHash,
+      hash_available: !!skr.hash
+    }
+
+    return NextResponse.json(verificationResult, {
+      headers: {
+        'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }
+    })
+  } catch (error) {
+    console.error('SKR verification error:', error)
+    
+    return NextResponse.json(
+      { 
+        valid: false,
+        error: 'Verification service temporarily unavailable',
+        skr_number: params.skrNumber
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// Handle CORS preflight requests
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  })
+}

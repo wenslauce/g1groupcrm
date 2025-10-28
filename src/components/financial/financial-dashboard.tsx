@@ -1,1 +1,561 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { useRouter } from 'next/navigation'\nimport { Button } from '@/components/ui/button'\nimport { Input } from '@/components/ui/input'\nimport { Badge } from '@/components/ui/badge'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'\nimport { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'\nimport { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'\nimport { \n  Search, \n  Filter, \n  Plus, \n  Eye, \n  Download,\n  Loader2,\n  FileText,\n  Receipt,\n  Minus,\n  Calendar,\n  User,\n  DollarSign,\n  TrendingUp,\n  TrendingDown\n} from 'lucide-react'\nimport { InvoiceWithRelations, Receipt as ReceiptType, CreditNote } from '@/types'\nimport { financialUtils } from '@/lib/financial-utils'\nimport { formatCurrency, formatDateTime } from '@/lib/utils'\nimport { usePermissions } from '@/contexts/auth-context'\n\ninterface FinancialDashboardProps {\n  clientId?: string\n}\n\nexport function FinancialDashboard({ clientId }: FinancialDashboardProps) {\n  const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([])\n  const [receipts, setReceipts] = useState<ReceiptType[]>([])\n  const [creditNotes, setCreditNotes] = useState<CreditNote[]>([])\n  const [loading, setLoading] = useState(true)\n  const [error, setError] = useState('')\n  const [searchTerm, setSearchTerm] = useState('')\n  const [statusFilter, setStatusFilter] = useState('')\n  const [dateFromFilter, setDateFromFilter] = useState('')\n  const [dateToFilter, setDateToFilter] = useState('')\n  const [activeTab, setActiveTab] = useState('invoices')\n  const [page, setPage] = useState(1)\n  const [totalPages, setTotalPages] = useState(1)\n  const [totalCount, setTotalCount] = useState(0)\n  const [financialSummary, setFinancialSummary] = useState({\n    totalInvoiced: 0,\n    totalPaid: 0,\n    totalCredited: 0,\n    outstanding: 0,\n    paidPercentage: 0\n  })\n  \n  const router = useRouter()\n  const permissions = usePermissions()\n  const limit = 10\n\n  useEffect(() => {\n    fetchFinancialData()\n  }, [page, searchTerm, statusFilter, dateFromFilter, dateToFilter, activeTab, clientId])\n\n  const fetchFinancialData = async () => {\n    setLoading(true)\n    try {\n      const params = new URLSearchParams({\n        page: page.toString(),\n        limit: limit.toString(),\n        ...(searchTerm && { search: searchTerm }),\n        ...(statusFilter && { status: statusFilter }),\n        ...(clientId && { client_id: clientId }),\n        ...(dateFromFilter && { date_from: dateFromFilter }),\n        ...(dateToFilter && { date_to: dateToFilter })\n      })\n      \n      let endpoint = '/api/invoices'\n      if (activeTab === 'receipts') endpoint = '/api/receipts'\n      if (activeTab === 'credit-notes') endpoint = '/api/credit-notes'\n      \n      const response = await fetch(`${endpoint}?${params}`)\n      const result = await response.json()\n      \n      if (!response.ok) {\n        throw new Error(result.error || 'Failed to fetch financial data')\n      }\n      \n      if (activeTab === 'invoices') {\n        setInvoices(result.data)\n      } else if (activeTab === 'receipts') {\n        setReceipts(result.data)\n      } else if (activeTab === 'credit-notes') {\n        setCreditNotes(result.data)\n      }\n      \n      setTotalPages(result.total_pages)\n      setTotalCount(result.count)\n      \n      // Fetch summary data\n      if (activeTab === 'invoices') {\n        await fetchFinancialSummary()\n      }\n    } catch (error) {\n      setError(error instanceof Error ? error.message : 'An error occurred')\n    } finally {\n      setLoading(false)\n    }\n  }\n\n  const fetchFinancialSummary = async () => {\n    try {\n      const [invoicesRes, receiptsRes, creditNotesRes] = await Promise.all([\n        fetch(`/api/invoices?limit=1000${clientId ? `&client_id=${clientId}` : ''}`),\n        fetch(`/api/receipts?limit=1000${clientId ? `&client_id=${clientId}` : ''}`),\n        fetch(`/api/credit-notes?limit=1000${clientId ? `&client_id=${clientId}` : ''}`)\n      ])\n      \n      const [invoicesData, receiptsData, creditNotesData] = await Promise.all([\n        invoicesRes.json(),\n        receiptsRes.json(),\n        creditNotesRes.json()\n      ])\n      \n      if (invoicesRes.ok && receiptsRes.ok && creditNotesRes.ok) {\n        const summary = financialUtils.calculateFinancialSummary(\n          invoicesData.data,\n          receiptsData.data,\n          creditNotesData.data.filter((cn: any) => cn.status === 'applied')\n        )\n        setFinancialSummary(summary)\n      }\n    } catch (error) {\n      console.error('Failed to fetch financial summary:', error)\n    }\n  }\n\n  const handleSearch = (value: string) => {\n    setSearchTerm(value)\n    setPage(1)\n  }\n\n  const handleStatusFilter = (value: string) => {\n    setStatusFilter(value === 'all' ? '' : value)\n    setPage(1)\n  }\n\n  const clearFilters = () => {\n    setSearchTerm('')\n    setStatusFilter('')\n    setDateFromFilter('')\n    setDateToFilter('')\n    setPage(1)\n  }\n\n  const handleTabChange = (tab: string) => {\n    setActiveTab(tab)\n    setPage(1)\n    setStatusFilter('')\n  }\n\n  const handleViewDocument = (type: string, id: string) => {\n    router.push(`/dashboard/${type}/${id}`)\n  }\n\n  const handleCreateDocument = (type: string) => {\n    router.push(`/dashboard/${type}/create`)\n  }\n\n  if (error) {\n    return (\n      <Card>\n        <CardContent className=\"p-6\">\n          <div className=\"text-center text-red-600\">\n            <FileText className=\"h-12 w-12 mx-auto mb-4 opacity-50\" />\n            <p>{error}</p>\n            <Button onClick={fetchFinancialData} className=\"mt-4\">\n              Try Again\n            </Button>\n          </div>\n        </CardContent>\n      </Card>\n    )\n  }\n\n  return (\n    <div className=\"space-y-6\">\n      {/* Header */}\n      <div className=\"flex items-center justify-between\">\n        <div>\n          <h2 className=\"text-2xl font-bold tracking-tight\">Financial Management</h2>\n          <p className=\"text-muted-foreground\">\n            Manage invoices, receipts, and credit notes\n          </p>\n        </div>\n        {permissions.canManageFinance() && (\n          <div className=\"flex gap-2\">\n            <Button \n              onClick={() => handleCreateDocument('invoices')}\n              className=\"bg-g1-primary hover:bg-g1-primary/90\"\n            >\n              <Plus className=\"mr-2 h-4 w-4\" />\n              New Invoice\n            </Button>\n          </div>\n        )}\n      </div>\n\n      {/* Financial Summary */}\n      {activeTab === 'invoices' && (\n        <div className=\"grid grid-cols-1 md:grid-cols-4 gap-4\">\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <FileText className=\"h-5 w-5 text-blue-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{formatCurrency(financialSummary.totalInvoiced, 'USD')}</div>\n                  <div className=\"text-sm text-muted-foreground\">Total Invoiced</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <TrendingUp className=\"h-5 w-5 text-green-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{formatCurrency(financialSummary.totalPaid, 'USD')}</div>\n                  <div className=\"text-sm text-muted-foreground\">Total Paid</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <TrendingDown className=\"h-5 w-5 text-red-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{formatCurrency(financialSummary.totalCredited, 'USD')}</div>\n                  <div className=\"text-sm text-muted-foreground\">Total Credited</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <DollarSign className=\"h-5 w-5 text-orange-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{formatCurrency(financialSummary.outstanding, 'USD')}</div>\n                  <div className=\"text-sm text-muted-foreground\">Outstanding</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n      )}\n\n      {/* Filters */}\n      <Card>\n        <CardHeader>\n          <CardTitle className=\"flex items-center gap-2\">\n            <Filter className=\"h-5 w-5\" />\n            Filters\n          </CardTitle>\n        </CardHeader>\n        <CardContent>\n          <div className=\"grid grid-cols-1 md:grid-cols-4 gap-4\">\n            {/* Search */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Search</label>\n              <div className=\"relative\">\n                <Search className=\"absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground\" />\n                <Input\n                  placeholder=\"Search documents...\"\n                  value={searchTerm}\n                  onChange={(e) => handleSearch(e.target.value)}\n                  className=\"pl-10\"\n                />\n              </div>\n            </div>\n\n            {/* Status Filter */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Status</label>\n              <Select value={statusFilter || 'all'} onValueChange={handleStatusFilter}>\n                <SelectTrigger>\n                  <SelectValue placeholder=\"All statuses\" />\n                </SelectTrigger>\n                <SelectContent>\n                  <SelectItem value=\"all\">All Statuses</SelectItem>\n                  {activeTab === 'invoices' && financialUtils.getAllInvoiceStatuses().map((status) => (\n                    <SelectItem key={status.value} value={status.value}>\n                      {status.label}\n                    </SelectItem>\n                  ))}\n                  {activeTab === 'credit-notes' && [\n                    { value: 'draft', label: 'Draft' },\n                    { value: 'issued', label: 'Issued' },\n                    { value: 'applied', label: 'Applied' }\n                  ].map((status) => (\n                    <SelectItem key={status.value} value={status.value}>\n                      {status.label}\n                    </SelectItem>\n                  ))}\n                </SelectContent>\n              </Select>\n            </div>\n\n            {/* Date Range */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">From Date</label>\n              <Input\n                type=\"date\"\n                value={dateFromFilter}\n                onChange={(e) => setDateFromFilter(e.target.value)}\n              />\n            </div>\n\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">To Date</label>\n              <Input\n                type=\"date\"\n                value={dateToFilter}\n                onChange={(e) => setDateToFilter(e.target.value)}\n              />\n            </div>\n          </div>\n\n          {/* Clear Filters */}\n          {(searchTerm || statusFilter || dateFromFilter || dateToFilter) && (\n            <div className=\"mt-4 pt-4 border-t\">\n              <Button variant=\"outline\" size=\"sm\" onClick={clearFilters}>\n                Clear Filters\n              </Button>\n            </div>\n          )}\n        </CardContent>\n      </Card>\n\n      {/* Document Tabs */}\n      <Tabs value={activeTab} onValueChange={handleTabChange}>\n        <TabsList className=\"grid w-full grid-cols-3\">\n          <TabsTrigger value=\"invoices\">Invoices</TabsTrigger>\n          <TabsTrigger value=\"receipts\">Receipts</TabsTrigger>\n          <TabsTrigger value=\"credit-notes\">Credit Notes</TabsTrigger>\n        </TabsList>\n        \n        <TabsContent value=\"invoices\" className=\"mt-6\">\n          <Card>\n            <CardContent className=\"p-0\">\n              {loading ? (\n                <div className=\"flex items-center justify-center p-8\">\n                  <Loader2 className=\"h-8 w-8 animate-spin\" />\n                </div>\n              ) : invoices.length === 0 ? (\n                <div className=\"text-center p-8\">\n                  <FileText className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n                  <h3 className=\"text-lg font-semibold mb-2\">No Invoices Found</h3>\n                  <p className=\"text-muted-foreground mb-4\">\n                    No invoices match your current filters\n                  </p>\n                  {permissions.canManageFinance() && (\n                    <Button onClick={() => handleCreateDocument('invoices')} className=\"bg-g1-primary hover:bg-g1-primary/90\">\n                      <Plus className=\"mr-2 h-4 w-4\" />\n                      Create First Invoice\n                    </Button>\n                  )}\n                </div>\n              ) : (\n                <Table>\n                  <TableHeader>\n                    <TableRow>\n                      <TableHead>Invoice Number</TableHead>\n                      <TableHead>Client</TableHead>\n                      <TableHead>Amount</TableHead>\n                      <TableHead>Status</TableHead>\n                      <TableHead>Due Date</TableHead>\n                      <TableHead>Created</TableHead>\n                      <TableHead className=\"text-right\">Actions</TableHead>\n                    </TableRow>\n                  </TableHeader>\n                  <TableBody>\n                    {invoices.map((invoice) => (\n                      <TableRow key={invoice.id}>\n                        <TableCell className=\"font-mono font-medium\">\n                          {invoice.invoice_number}\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"flex items-center gap-2\">\n                            <User className=\"h-4 w-4 text-muted-foreground\" />\n                            <span>{invoice.client?.name}</span>\n                          </div>\n                        </TableCell>\n                        <TableCell>\n                          <span className=\"font-medium\">\n                            {formatCurrency(invoice.amount, invoice.currency)}\n                          </span>\n                        </TableCell>\n                        <TableCell>\n                          <Badge className={financialUtils.getInvoiceStatusColor(invoice.status)}>\n                            {financialUtils.getInvoiceStatusDisplayName(invoice.status)}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          {invoice.due_date ? (\n                            <div className=\"flex items-center gap-2\">\n                              <Calendar className=\"h-4 w-4 text-muted-foreground\" />\n                              <span className={financialUtils.isOverdue(invoice.due_date) ? 'text-red-600' : ''}>\n                                {formatDateTime(invoice.due_date)}\n                              </span>\n                            </div>\n                          ) : (\n                            <span className=\"text-muted-foreground\">Not set</span>\n                          )}\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"text-sm text-muted-foreground\">\n                            {formatDateTime(invoice.created_at)}\n                          </div>\n                        </TableCell>\n                        <TableCell className=\"text-right\">\n                          <div className=\"flex items-center justify-end gap-2\">\n                            <Button\n                              variant=\"ghost\"\n                              size=\"sm\"\n                              onClick={() => handleViewDocument('invoices', invoice.id)}\n                            >\n                              <Eye className=\"h-4 w-4\" />\n                            </Button>\n                            <Button variant=\"ghost\" size=\"sm\">\n                              <Download className=\"h-4 w-4\" />\n                            </Button>\n                          </div>\n                        </TableCell>\n                      </TableRow>\n                    ))}\n                  </TableBody>\n                </Table>\n              )}\n            </CardContent>\n          </Card>\n        </TabsContent>\n        \n        <TabsContent value=\"receipts\" className=\"mt-6\">\n          <Card>\n            <CardContent className=\"p-0\">\n              {loading ? (\n                <div className=\"flex items-center justify-center p-8\">\n                  <Loader2 className=\"h-8 w-8 animate-spin\" />\n                </div>\n              ) : receipts.length === 0 ? (\n                <div className=\"text-center p-8\">\n                  <Receipt className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n                  <h3 className=\"text-lg font-semibold mb-2\">No Receipts Found</h3>\n                  <p className=\"text-muted-foreground\">\n                    No payment receipts match your current filters\n                  </p>\n                </div>\n              ) : (\n                <Table>\n                  <TableHeader>\n                    <TableRow>\n                      <TableHead>Receipt Number</TableHead>\n                      <TableHead>Invoice</TableHead>\n                      <TableHead>Client</TableHead>\n                      <TableHead>Amount</TableHead>\n                      <TableHead>Payment Method</TableHead>\n                      <TableHead>Payment Date</TableHead>\n                      <TableHead className=\"text-right\">Actions</TableHead>\n                    </TableRow>\n                  </TableHeader>\n                  <TableBody>\n                    {receipts.map((receipt) => (\n                      <TableRow key={receipt.id}>\n                        <TableCell className=\"font-mono font-medium\">\n                          {receipt.receipt_number}\n                        </TableCell>\n                        <TableCell>\n                          <span className=\"font-medium\">{receipt.invoice?.invoice_number}</span>\n                        </TableCell>\n                        <TableCell>\n                          <span>{receipt.client?.name}</span>\n                        </TableCell>\n                        <TableCell>\n                          <span className=\"font-medium text-green-600\">\n                            {formatCurrency(receipt.amount, receipt.currency)}\n                          </span>\n                        </TableCell>\n                        <TableCell>\n                          <Badge variant=\"secondary\">\n                            {financialUtils.getPaymentMethodDisplayName(receipt.payment_method)}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"text-sm\">\n                            {formatDateTime(receipt.payment_date)}\n                          </div>\n                        </TableCell>\n                        <TableCell className=\"text-right\">\n                          <Button variant=\"ghost\" size=\"sm\">\n                            <Download className=\"h-4 w-4\" />\n                          </Button>\n                        </TableCell>\n                      </TableRow>\n                    ))}\n                  </TableBody>\n                </Table>\n              )}\n            </CardContent>\n          </Card>\n        </TabsContent>\n        \n        <TabsContent value=\"credit-notes\" className=\"mt-6\">\n          <Card>\n            <CardContent className=\"p-0\">\n              {loading ? (\n                <div className=\"flex items-center justify-center p-8\">\n                  <Loader2 className=\"h-8 w-8 animate-spin\" />\n                </div>\n              ) : creditNotes.length === 0 ? (\n                <div className=\"text-center p-8\">\n                  <Minus className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n                  <h3 className=\"text-lg font-semibold mb-2\">No Credit Notes Found</h3>\n                  <p className=\"text-muted-foreground\">\n                    No credit notes match your current filters\n                  </p>\n                </div>\n              ) : (\n                <Table>\n                  <TableHeader>\n                    <TableRow>\n                      <TableHead>Credit Note Number</TableHead>\n                      <TableHead>Invoice</TableHead>\n                      <TableHead>Client</TableHead>\n                      <TableHead>Amount</TableHead>\n                      <TableHead>Reason</TableHead>\n                      <TableHead>Status</TableHead>\n                      <TableHead>Created</TableHead>\n                      <TableHead className=\"text-right\">Actions</TableHead>\n                    </TableRow>\n                  </TableHeader>\n                  <TableBody>\n                    {creditNotes.map((creditNote) => (\n                      <TableRow key={creditNote.id}>\n                        <TableCell className=\"font-mono font-medium\">\n                          {creditNote.credit_note_number}\n                        </TableCell>\n                        <TableCell>\n                          <span className=\"font-medium\">{creditNote.invoice?.invoice_number}</span>\n                        </TableCell>\n                        <TableCell>\n                          <span>{creditNote.client?.name}</span>\n                        </TableCell>\n                        <TableCell>\n                          <span className=\"font-medium text-red-600\">\n                            -{formatCurrency(creditNote.amount, creditNote.currency)}\n                          </span>\n                        </TableCell>\n                        <TableCell>\n                          <Badge variant=\"secondary\">\n                            {financialUtils.getCreditNoteReasonDisplayName(creditNote.reason)}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          <Badge className={financialUtils.getCreditNoteStatusColor(creditNote.status)}>\n                            {financialUtils.getCreditNoteStatusDisplayName(creditNote.status)}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"text-sm text-muted-foreground\">\n                            {formatDateTime(creditNote.created_at)}\n                          </div>\n                        </TableCell>\n                        <TableCell className=\"text-right\">\n                          <Button variant=\"ghost\" size=\"sm\">\n                            <Download className=\"h-4 w-4\" />\n                          </Button>\n                        </TableCell>\n                      </TableRow>\n                    ))}\n                  </TableBody>\n                </Table>\n              )}\n            </CardContent>\n          </Card>\n        </TabsContent>\n      </Tabs>\n\n      {/* Pagination */}\n      {totalPages > 1 && (\n        <div className=\"flex items-center justify-between\">\n          <div className=\"text-sm text-muted-foreground\">\n            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, totalCount)} of {totalCount} items\n          </div>\n          <div className=\"flex items-center gap-2\">\n            <Button\n              variant=\"outline\"\n              size=\"sm\"\n              onClick={() => setPage(page - 1)}\n              disabled={page === 1}\n            >\n              Previous\n            </Button>\n            <div className=\"flex items-center gap-1\">\n              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {\n                const pageNum = Math.max(1, Math.min(totalPages - 4, page - 2)) + i\n                return (\n                  <Button\n                    key={pageNum}\n                    variant={pageNum === page ? \"default\" : \"outline\"}\n                    size=\"sm\"\n                    onClick={() => setPage(pageNum)}\n                    className={pageNum === page ? \"bg-g1-primary hover:bg-g1-primary/90\" : \"\"}\n                  >\n                    {pageNum}\n                  </Button>\n                )\n              })}\n            </div>\n            <Button\n              variant=\"outline\"\n              size=\"sm\"\n              onClick={() => setPage(page + 1)}\n              disabled={page === totalPages}\n            >\n              Next\n            </Button>\n          </div>\n        </div>\n      )}\n    </div>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import { Search, Filter, Download, Plus, Eye, Edit, Trash2 } from 'lucide-react'
+
+interface Invoice {
+  id: string
+  invoice_number: string
+  client_id: string
+  client_name: string
+  skr_id?: string
+  skr_number?: string
+  amount: number
+  currency: string
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+  due_date: string
+  created_at: string
+  items: Array<{
+    description: string
+    quantity: number
+    unit_price: number
+    total: number
+  }>
+}
+
+interface Receipt {
+  id: string
+  receipt_number: string
+  invoice_id: string
+  invoice_number: string
+  amount: number
+  currency: string
+  payment_method: string
+  payment_reference: string
+  created_at: string
+}
+
+interface CreditNote {
+  id: string
+  credit_note_number: string
+  invoice_id: string
+  invoice_number: string
+  amount: number
+  currency: string
+  reason: string
+  status: 'draft' | 'issued' | 'applied'
+  created_at: string
+}
+
+interface FinancialStats {
+  totalInvoices: number
+  totalAmount: number
+  paidAmount: number
+  overdueAmount: number
+  pendingAmount: number
+  totalReceipts: number
+  totalCreditNotes: number
+  averageInvoiceValue: number
+  collectionRate: number
+}
+
+export function FinancialDashboard() {
+  const [activeTab, setActiveTab] = useState('overview')
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [receipts, setReceipts] = useState<Receipt[]>([])
+  const [creditNotes, setCreditNotes] = useState<CreditNote[]>([])
+  const [stats, setStats] = useState<FinancialStats>({
+    totalInvoices: 0,
+    totalAmount: 0,
+    paidAmount: 0,
+    overdueAmount: 0,
+    pendingAmount: 0,
+    totalReceipts: 0,
+    totalCreditNotes: 0,
+    averageInvoiceValue: 0,
+    collectionRate: 0
+  })
+  
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+
+  useEffect(() => {
+    fetchFinancialData()
+  }, [activeTab, searchTerm, statusFilter, dateFilter, currentPage])
+
+  const fetchFinancialData = async () => {
+    try {
+      setLoading(true)
+      
+      // Fetch invoices
+      const invoiceParams = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+        search: searchTerm,
+        status: statusFilter !== 'all' ? statusFilter : '',
+        date_range: dateFilter !== 'all' ? dateFilter : ''
+      })
+      
+      const invoiceResponse = await fetch(`/api/invoices?${invoiceParams}`)
+      if (invoiceResponse.ok) {
+        const invoiceData = await invoiceResponse.json()
+        setInvoices(invoiceData.invoices || [])
+      }
+
+      // Fetch receipts
+      const receiptResponse = await fetch(`/api/receipts?${invoiceParams}`)
+      if (receiptResponse.ok) {
+        const receiptData = await receiptResponse.json()
+        setReceipts(receiptData.receipts || [])
+      }
+
+      // Fetch credit notes
+      const creditNoteResponse = await fetch(`/api/credit-notes?${invoiceParams}`)
+      if (creditNoteResponse.ok) {
+        const creditNoteData = await creditNoteResponse.json()
+        setCreditNotes(creditNoteData.credit_notes || [])
+      }
+
+      // Fetch financial analytics
+      const analyticsResponse = await fetch('/api/analytics/financial')
+      if (analyticsResponse.ok) {
+        const analyticsData = await analyticsResponse.json()
+        setStats(analyticsData.summary || stats)
+      }
+    } catch (error) {
+      console.error('Error fetching financial data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      draft: 'bg-gray-100 text-gray-800',
+      sent: 'bg-blue-100 text-blue-800',
+      paid: 'bg-green-100 text-green-800',
+      overdue: 'bg-red-100 text-red-800',
+      cancelled: 'bg-gray-100 text-gray-800',
+      issued: 'bg-blue-100 text-blue-800',
+      applied: 'bg-green-100 text-green-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const handleViewInvoice = (invoiceId: string) => {
+    // Navigate to invoice details
+    window.open(`/dashboard/invoices/${invoiceId}`, '_blank')
+  }
+
+  const handleEditInvoice = (invoiceId: string) => {
+    // Navigate to edit invoice
+    window.open(`/dashboard/invoices/${invoiceId}/edit`, '_blank')
+  }
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    if (confirm('Are you sure you want to delete this invoice?')) {
+      try {
+        const response = await fetch(`/api/invoices/${invoiceId}`, {
+          method: 'DELETE'
+        })
+        
+        if (response.ok) {
+          fetchFinancialData()
+        } else {
+          alert('Failed to delete invoice')
+        }
+      } catch (error) {
+        console.error('Error deleting invoice:', error)
+        alert('Error deleting invoice')
+      }
+    }
+  }
+
+  const handleGeneratePDF = async (type: string, id: string) => {
+    try {
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          document_type: type,
+          document_id: id
+        })
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${type}-${id}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        alert('Failed to generate PDF')
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      alert('Error generating PDF')
+    }
+  }
+
+  const renderInvoicesTable = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Invoices</h3>
+        <Button onClick={() => window.open('/dashboard/invoices/create', '_blank')}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Invoice
+        </Button>
+      </div>
+      
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Invoice #</TableHead>
+            <TableHead>Client</TableHead>
+            <TableHead>SKR #</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Due Date</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {invoices.map((invoice) => (
+            <TableRow key={invoice.id}>
+              <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
+              <TableCell>{invoice.client_name}</TableCell>
+              <TableCell>{invoice.skr_number || '-'}</TableCell>
+              <TableCell>{formatCurrency(invoice.amount, invoice.currency)}</TableCell>
+              <TableCell>
+                <Badge className={getStatusColor(invoice.status)}>
+                  {invoice.status.toUpperCase()}
+                </Badge>
+              </TableCell>
+              <TableCell>{formatDate(invoice.due_date)}</TableCell>
+              <TableCell>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewInvoice(invoice.id)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditInvoice(invoice.id)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleGeneratePDF('invoice', invoice.id)}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteInvoice(invoice.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+
+  const renderReceiptsTable = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Receipts</h3>
+      </div>
+      
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Receipt #</TableHead>
+            <TableHead>Invoice #</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Payment Method</TableHead>
+            <TableHead>Reference</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {receipts.map((receipt) => (
+            <TableRow key={receipt.id}>
+              <TableCell className="font-medium">{receipt.receipt_number}</TableCell>
+              <TableCell>{receipt.invoice_number}</TableCell>
+              <TableCell>{formatCurrency(receipt.amount, receipt.currency)}</TableCell>
+              <TableCell>{receipt.payment_method}</TableCell>
+              <TableCell>{receipt.payment_reference}</TableCell>
+              <TableCell>{formatDate(receipt.created_at)}</TableCell>
+              <TableCell>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleGeneratePDF('receipt', receipt.id)}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+
+  const renderCreditNotesTable = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Credit Notes</h3>
+        <Button onClick={() => window.open('/dashboard/credit-notes/create', '_blank')}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Credit Note
+        </Button>
+      </div>
+      
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Credit Note #</TableHead>
+            <TableHead>Invoice #</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Reason</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {creditNotes.map((creditNote) => (
+            <TableRow key={creditNote.id}>
+              <TableCell className="font-medium">{creditNote.credit_note_number}</TableCell>
+              <TableCell>{creditNote.invoice_number}</TableCell>
+              <TableCell>{formatCurrency(creditNote.amount, creditNote.currency)}</TableCell>
+              <TableCell>{creditNote.reason}</TableCell>
+              <TableCell>
+                <Badge className={getStatusColor(creditNote.status)}>
+                  {creditNote.status.toUpperCase()}
+                </Badge>
+              </TableCell>
+              <TableCell>{formatDate(creditNote.created_at)}</TableCell>
+              <TableCell>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleGeneratePDF('credit_note', creditNote.id)}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading financial data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Financial Dashboard</h1>
+          <p className="text-gray-600">Manage invoices, receipts, and credit notes</p>
+        </div>
+        <div className="flex space-x-2">
+          <Button variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Export Data
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalInvoices}</div>
+            <p className="text-xs text-muted-foreground">
+              {formatCurrency(stats.totalAmount, 'USD')} total value
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Paid Amount</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {formatCurrency(stats.paidAmount, 'USD')}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {stats.collectionRate.toFixed(1)}% collection rate
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Overdue Amount</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {formatCurrency(stats.overdueAmount, 'USD')}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Requires attention
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Average Invoice</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCurrency(stats.averageInvoiceValue, 'USD')}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Per invoice
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <Input
+                placeholder="Search invoices, clients..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Date Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="quarter">This Quarter</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          <TabsTrigger value="receipts">Receipts</TabsTrigger>
+          <TabsTrigger value="credit-notes">Credit Notes</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Invoices</CardTitle>
+                <CardDescription>Latest invoice activity</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {renderInvoicesTable()}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Receipts</CardTitle>
+                <CardDescription>Latest payment receipts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {renderReceiptsTable()}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="invoices">
+          {renderInvoicesTable()}
+        </TabsContent>
+
+        <TabsContent value="receipts">
+          {renderReceiptsTable()}
+        </TabsContent>
+
+        <TabsContent value="credit-notes">
+          {renderCreditNotesTable()}
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}

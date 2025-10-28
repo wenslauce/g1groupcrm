@@ -391,3 +391,83 @@ function groupComplianceData(data: any[], groupBy: string) {
   }))
 }
 
+/**
+ * Generate time series points for analytics
+ */
+export function generateTimeSeriesPoints(startDate: string, endDate: string, groupBy: string): string[] {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const points: string[] = []
+  
+  const current = new Date(start)
+  
+  while (current <= end) {
+    let point: string
+    
+    switch (groupBy) {
+      case 'day':
+        point = current.toISOString().split('T')[0]
+        current.setDate(current.getDate() + 1)
+        break
+      case 'week':
+        point = current.toISOString().split('T')[0]
+        current.setDate(current.getDate() + 7)
+        break
+      case 'month':
+        point = current.toISOString().substring(0, 7) // YYYY-MM
+        current.setMonth(current.getMonth() + 1)
+        break
+      case 'quarter':
+        const quarter = Math.floor(current.getMonth() / 3) + 1
+        point = `${current.getFullYear()}-Q${quarter}`
+        current.setMonth(current.getMonth() + 3)
+        break
+      case 'year':
+        point = current.getFullYear().toString()
+        current.setFullYear(current.getFullYear() + 1)
+        break
+      default:
+        point = current.toISOString().split('T')[0]
+        current.setDate(current.getDate() + 1)
+    }
+    
+    points.push(point)
+  }
+  
+  return points
+}
+
+/**
+ * Format date for grouping
+ */
+export function formatDateForGroup(date: string, groupBy: string): string {
+  const d = new Date(date)
+  
+  switch (groupBy) {
+    case 'day':
+      return d.toISOString().split('T')[0]
+    case 'week':
+      return d.toISOString().split('T')[0]
+    case 'month':
+      return d.toISOString().substring(0, 7)
+    case 'quarter':
+      const quarter = Math.floor(d.getMonth() / 3) + 1
+      return `${d.getFullYear()}-Q${quarter}`
+    case 'year':
+      return d.getFullYear().toString()
+    default:
+      return d.toISOString().split('T')[0]
+  }
+}
+
+// Export the analyticsUtils object for compatibility
+export const analyticsUtils = {
+  getDateRange,
+  formatAnalyticsResponse,
+  getSKRAnalytics,
+  getFinancialAnalytics,
+  getComplianceAnalytics,
+  generateTimeSeriesPoints,
+  formatDateForGroup
+}
+

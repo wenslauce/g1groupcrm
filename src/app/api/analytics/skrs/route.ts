@@ -26,6 +26,10 @@ export async function GET(request: NextRequest) {
     // Set default date range if not provided
     const dateRange = filters.date_range || analyticsUtils.getDateRange('year')
     
+    // Normalize date range to ensure consistent format
+    const startDate = 'start_date' in dateRange ? dateRange.start_date : dateRange.start.toISOString()
+    const endDate = 'end_date' in dateRange ? dateRange.end_date : dateRange.end.toISOString()
+    
     // Fetch SKR data with related information
     const { data: skrs, error: skrsError } = await supabase
       .from('skrs')
@@ -39,8 +43,8 @@ export async function GET(request: NextRequest) {
         client:clients(id, name, type, country),
         asset:assets(id, asset_name, asset_type, declared_value, currency)
       `)
-      .gte('created_at', dateRange.start_date)
-      .lte('created_at', dateRange.end_date)
+      .gte('created_at', startDate)
+      .lte('created_at', endDate)
       .order('created_at', { ascending: false })
     
     if (skrsError) {
@@ -58,20 +62,23 @@ export async function GET(request: NextRequest) {
     }, {} as Record<string, number>)
     
     const clientTypeDistribution = skrData.reduce((acc, skr) => {
-      const clientType = skr.client?.type || 'unknown'
+      const client = Array.isArray(skr.client) ? skr.client[0] : skr.client
+      const clientType = client?.type || 'unknown'
       acc[clientType] = (acc[clientType] || 0) + 1
       return acc
     }, {} as Record<string, number>)
     
     const assetTypeDistribution = skrData.reduce((acc, skr) => {
-      const assetType = skr.asset?.asset_type || 'unknown'
+      const asset = Array.isArray(skr.asset) ? skr.asset[0] : skr.asset
+      const assetType = asset?.asset_type || 'unknown'
       acc[assetType] = (acc[assetType] || 0) + 1
       return acc
     }, {} as Record<string, number>)
     
     // Calculate total asset value
     const totalAssetValue = skrData.reduce((sum, skr) => {
-      return sum + (skr.asset?.declared_value || 0)
+      const asset = Array.isArray(skr.asset) ? skr.asset[0] : skr.asset
+      return sum + (asset?.declared_value || 0)
     }, 0)
     
     // Calculate average processing time (from creation to issuance)
@@ -86,8 +93,8 @@ export async function GET(request: NextRequest) {
     
     // Generate time series data
     const timePoints = analyticsUtils.generateTimeSeriesPoints(
-      dateRange.start_date,
-      dateRange.end_date,
+      startDate,
+      endDate,
       filters.group_by
     )
     
@@ -124,7 +131,10 @@ export async function GET(request: NextRequest) {
         issued: periodSKRs.filter(s => s.status === 'issued').length,
         in_transit: periodSKRs.filter(s => s.status === 'in_transit').length,
         delivered: periodSKRs.filter(s => s.status === 'delivered').length,
-        value: periodSKRs.reduce((sum, s) => sum + (s.asset?.declared_value || 0), 0)
+        value: periodSKRs.reduce((sum, s) => {
+          const asset = Array.isArray(s.asset) ? s.asset[0] : s.asset
+          return sum + (asset?.declared_value || 0)
+        }, 0)
       }
     })
     
@@ -143,21 +153,23 @@ export async function GET(request: NextRequest) {
     
     // Top clients by SKR count
     const clientSKRCounts = skrData.reduce((acc, skr) => {
-      const clientName = skr.client?.name || 'Unknown'
-      const clientId = skr.client?.id || 'unknown'
+      const client = Array.isArray(skr.client) ? skr.client[0] : skr.client
+      const clientName = client?.name || 'Unknown'
+      const clientId = client?.id || 'unknown'
       
       if (!acc[clientId]) {
         acc[clientId] = {
           client_id: clientId,
           client_name: clientName,
-          client_type: skr.client?.type || 'unknown',
+          client_type: client?.type || 'unknown',
           skr_count: 0,
           total_value: 0
         }
       }
       
       acc[clientId].skr_count++
-      acc[clientId].total_value += skr.asset?.declared_value || 0
+      const asset = Array.isArray(skr.asset) ? skr.asset[0] : skr.asset
+      acc[clientId].total_value += asset?.declared_value || 0
       
       return acc
     }, {} as Record<string, any>)
@@ -168,7 +180,8 @@ export async function GET(request: NextRequest) {
     
     // Top asset types by value
     const assetTypeValues = skrData.reduce((acc, skr) => {
-      const assetType = skr.asset?.asset_type || 'unknown'
+      const asset = Array.isArray(skr.asset) ? skr.asset[0] : skr.asset
+      const assetType = asset?.asset_type || 'unknown'
       
       if (!acc[assetType]) {
         acc[assetType] = {
@@ -179,7 +192,7 @@ export async function GET(request: NextRequest) {
       }
       
       acc[assetType].skr_count++
-      acc[assetType].total_value += skr.asset?.declared_value || 0
+      acc[assetType].total_value += asset?.declared_value || 0
       
       return acc
     }, {} as Record<string, any>)
@@ -190,7 +203,8 @@ export async function GET(request: NextRequest) {
     
     // Country distribution
     const countryDistribution = skrData.reduce((acc, skr) => {
-      const country = skr.client?.country || 'unknown'
+      const client = Array.isArray(skr.client) ? skr.client[0] : skr.client
+      const country = client?.country || 'unknown'
       acc[country] = (acc[country] || 0) + 1
       return acc
     }, {} as Record<string, number>)
@@ -198,17 +212,21 @@ export async function GET(request: NextRequest) {
     // Recent SKRs
     const recentSKRs = skrData
       .slice(0, 20)
-      .map(skr => ({
-        id: skr.id,
-        skr_number: skr.skr_number,
-        status: skr.status,
-        client_name: skr.client?.name,
-        asset_name: skr.asset?.asset_name,
-        asset_value: skr.asset?.declared_value,
-        currency: skr.asset?.currency,
-        created_at: skr.created_at,
-        issue_date: skr.issue_date
-      }))
+      .map(skr => {
+        const client = Array.isArray(skr.client) ? skr.client[0] : skr.client
+        const asset = Array.isArray(skr.asset) ? skr.asset[0] : skr.asset
+        return {
+          id: skr.id,
+          skr_number: skr.skr_number,
+          status: skr.status,
+          client_name: client?.name,
+          asset_name: asset?.asset_name,
+          asset_value: asset?.declared_value,
+          currency: asset?.currency,
+          created_at: skr.created_at,
+          issue_date: skr.issue_date
+        }
+      })
     
     const analytics = {
       performance_metrics: performanceMetrics,

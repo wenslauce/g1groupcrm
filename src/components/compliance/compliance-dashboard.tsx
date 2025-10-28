@@ -1,1 +1,656 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { useRouter } from 'next/navigation'\nimport { Button } from '@/components/ui/button'\nimport { Input } from '@/components/ui/input'\nimport { Badge } from '@/components/ui/badge'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'\nimport { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'\nimport { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'\nimport { \n  Search, \n  Filter, \n  Plus, \n  Eye, \n  Download,\n  Loader2,\n  Shield,\n  AlertTriangle,\n  CheckCircle,\n  Clock,\n  FileText,\n  User,\n  TrendingUp,\n  TrendingDown,\n  Calendar\n} from 'lucide-react'\nimport { ClientWithRelations } from '@/types'\nimport { kycUtils } from '@/lib/kyc-utils'\nimport { formatDateTime } from '@/lib/utils'\nimport { usePermissions } from '@/contexts/auth-context'\n\ninterface ComplianceDashboardProps {\n  clientId?: string\n}\n\nexport function ComplianceDashboard({ clientId }: ComplianceDashboardProps) {\n  const [kycDocuments, setKYCDocuments] = useState<any[]>([])\n  const [assessments, setAssessments] = useState<any[]>([])\n  const [clients, setClients] = useState<ClientWithRelations[]>([])\n  const [loading, setLoading] = useState(true)\n  const [error, setError] = useState('')\n  const [searchTerm, setSearchTerm] = useState('')\n  const [statusFilter, setStatusFilter] = useState('')\n  const [riskLevelFilter, setRiskLevelFilter] = useState('')\n  const [activeTab, setActiveTab] = useState('overview')\n  const [page, setPage] = useState(1)\n  const [totalPages, setTotalPages] = useState(1)\n  const [complianceStats, setComplianceStats] = useState({\n    totalDocuments: 0,\n    approvedDocuments: 0,\n    rejectedDocuments: 0,\n    pendingDocuments: 0,\n    approvalRate: 0,\n    averageRiskScore: 0,\n    riskDistribution: { low: 0, medium: 0, high: 0 }\n  })\n  \n  const router = useRouter()\n  const permissions = usePermissions()\n  const limit = 10\n\n  useEffect(() => {\n    fetchComplianceData()\n  }, [page, searchTerm, statusFilter, riskLevelFilter, activeTab, clientId])\n\n  const fetchComplianceData = async () => {\n    setLoading(true)\n    try {\n      const params = new URLSearchParams({\n        page: page.toString(),\n        limit: limit.toString(),\n        ...(searchTerm && { search: searchTerm }),\n        ...(statusFilter && { status: statusFilter }),\n        ...(riskLevelFilter && { risk_level: riskLevelFilter }),\n        ...(clientId && { client_id: clientId })\n      })\n      \n      let endpoint = '/api/kyc/documents'\n      if (activeTab === 'assessments') endpoint = '/api/compliance/assessments'\n      \n      const response = await fetch(`${endpoint}?${params}`)\n      const result = await response.json()\n      \n      if (!response.ok) {\n        throw new Error(result.error || 'Failed to fetch compliance data')\n      }\n      \n      if (activeTab === 'documents' || activeTab === 'overview') {\n        setKYCDocuments(result.data)\n      } else if (activeTab === 'assessments') {\n        setAssessments(result.data)\n      }\n      \n      setTotalPages(result.total_pages)\n      \n      // Fetch overview stats\n      if (activeTab === 'overview') {\n        await fetchComplianceStats()\n      }\n    } catch (error) {\n      setError(error instanceof Error ? error.message : 'An error occurred')\n    } finally {\n      setLoading(false)\n    }\n  }\n\n  const fetchComplianceStats = async () => {\n    try {\n      const [docsRes, assessmentsRes] = await Promise.all([\n        fetch(`/api/kyc/documents?limit=1000${clientId ? `&client_id=${clientId}` : ''}`),\n        fetch(`/api/compliance/assessments?limit=1000${clientId ? `&client_id=${clientId}` : ''}`)\n      ])\n      \n      const [docsData, assessmentsData] = await Promise.all([\n        docsRes.json(),\n        assessmentsRes.json()\n      ])\n      \n      if (docsRes.ok && assessmentsRes.ok) {\n        const stats = kycUtils.generateComplianceReport(docsData.data, assessmentsData.data)\n        setComplianceStats(stats)\n      }\n    } catch (error) {\n      console.error('Failed to fetch compliance stats:', error)\n    }\n  }\n\n  const handleSearch = (value: string) => {\n    setSearchTerm(value)\n    setPage(1)\n  }\n\n  const handleStatusFilter = (value: string) => {\n    setStatusFilter(value === 'all' ? '' : value)\n    setPage(1)\n  }\n\n  const handleRiskLevelFilter = (value: string) => {\n    setRiskLevelFilter(value === 'all' ? '' : value)\n    setPage(1)\n  }\n\n  const clearFilters = () => {\n    setSearchTerm('')\n    setStatusFilter('')\n    setRiskLevelFilter('')\n    setPage(1)\n  }\n\n  const handleTabChange = (tab: string) => {\n    setActiveTab(tab)\n    setPage(1)\n    setStatusFilter('')\n    setRiskLevelFilter('')\n  }\n\n  const handleViewDocument = (id: string) => {\n    router.push(`/dashboard/compliance/documents/${id}`)\n  }\n\n  const handleCreateAssessment = () => {\n    router.push('/dashboard/compliance/assessments/create')\n  }\n\n  if (error) {\n    return (\n      <Card>\n        <CardContent className=\"p-6\">\n          <div className=\"text-center text-red-600\">\n            <AlertTriangle className=\"h-12 w-12 mx-auto mb-4 opacity-50\" />\n            <p>{error}</p>\n            <Button onClick={fetchComplianceData} className=\"mt-4\">\n              Try Again\n            </Button>\n          </div>\n        </CardContent>\n      </Card>\n    )\n  }\n\n  return (\n    <div className=\"space-y-6\">\n      {/* Header */}\n      <div className=\"flex items-center justify-between\">\n        <div>\n          <h2 className=\"text-2xl font-bold tracking-tight\">Compliance Management</h2>\n          <p className=\"text-muted-foreground\">\n            Monitor KYC documents, risk assessments, and compliance status\n          </p>\n        </div>\n        {permissions.canViewCompliance() && (\n          <div className=\"flex gap-2\">\n            <Button \n              onClick={handleCreateAssessment}\n              className=\"bg-g1-primary hover:bg-g1-primary/90\"\n            >\n              <Plus className=\"mr-2 h-4 w-4\" />\n              New Assessment\n            </Button>\n          </div>\n        )}\n      </div>\n\n      {/* Compliance Overview Stats */}\n      {activeTab === 'overview' && (\n        <div className=\"grid grid-cols-1 md:grid-cols-4 gap-4\">\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <FileText className=\"h-5 w-5 text-blue-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{complianceStats.totalDocuments}</div>\n                  <div className=\"text-sm text-muted-foreground\">Total Documents</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <CheckCircle className=\"h-5 w-5 text-green-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{complianceStats.approvalRate.toFixed(1)}%</div>\n                  <div className=\"text-sm text-muted-foreground\">Approval Rate</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <Shield className=\"h-5 w-5 text-orange-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{complianceStats.averageRiskScore}</div>\n                  <div className=\"text-sm text-muted-foreground\">Avg Risk Score</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardContent className=\"p-6\">\n              <div className=\"flex items-center gap-2\">\n                <Clock className=\"h-5 w-5 text-yellow-500\" />\n                <div>\n                  <div className=\"text-2xl font-bold\">{complianceStats.pendingDocuments}</div>\n                  <div className=\"text-sm text-muted-foreground\">Pending Review</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n      )}\n\n      {/* Risk Distribution */}\n      {activeTab === 'overview' && (\n        <Card>\n          <CardHeader>\n            <CardTitle>Risk Level Distribution</CardTitle>\n          </CardHeader>\n          <CardContent>\n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              <div className=\"text-center\">\n                <div className=\"text-3xl font-bold text-green-600\">{complianceStats.riskDistribution.low}</div>\n                <div className=\"text-sm text-muted-foreground\">Low Risk</div>\n              </div>\n              <div className=\"text-center\">\n                <div className=\"text-3xl font-bold text-yellow-600\">{complianceStats.riskDistribution.medium}</div>\n                <div className=\"text-sm text-muted-foreground\">Medium Risk</div>\n              </div>\n              <div className=\"text-center\">\n                <div className=\"text-3xl font-bold text-red-600\">{complianceStats.riskDistribution.high}</div>\n                <div className=\"text-sm text-muted-foreground\">High Risk</div>\n              </div>\n            </div>\n          </CardContent>\n        </Card>\n      )}\n\n      {/* Filters */}\n      <Card>\n        <CardHeader>\n          <CardTitle className=\"flex items-center gap-2\">\n            <Filter className=\"h-5 w-5\" />\n            Filters\n          </CardTitle>\n        </CardHeader>\n        <CardContent>\n          <div className=\"grid grid-cols-1 md:grid-cols-4 gap-4\">\n            {/* Search */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Search</label>\n              <div className=\"relative\">\n                <Search className=\"absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground\" />\n                <Input\n                  placeholder=\"Search...\"\n                  value={searchTerm}\n                  onChange={(e) => handleSearch(e.target.value)}\n                  className=\"pl-10\"\n                />\n              </div>\n            </div>\n\n            {/* Status Filter */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Status</label>\n              <Select value={statusFilter || 'all'} onValueChange={handleStatusFilter}>\n                <SelectTrigger>\n                  <SelectValue placeholder=\"All statuses\" />\n                </SelectTrigger>\n                <SelectContent>\n                  <SelectItem value=\"all\">All Statuses</SelectItem>\n                  {kycUtils.getAllKYCStatuses().map((status) => (\n                    <SelectItem key={status.value} value={status.value}>\n                      {status.label}\n                    </SelectItem>\n                  ))}\n                </SelectContent>\n              </Select>\n            </div>\n\n            {/* Risk Level Filter */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Risk Level</label>\n              <Select value={riskLevelFilter || 'all'} onValueChange={handleRiskLevelFilter}>\n                <SelectTrigger>\n                  <SelectValue placeholder=\"All levels\" />\n                </SelectTrigger>\n                <SelectContent>\n                  <SelectItem value=\"all\">All Levels</SelectItem>\n                  <SelectItem value=\"low\">Low Risk</SelectItem>\n                  <SelectItem value=\"medium\">Medium Risk</SelectItem>\n                  <SelectItem value=\"high\">High Risk</SelectItem>\n                </SelectContent>\n              </Select>\n            </div>\n\n            {/* Clear Filters */}\n            <div className=\"flex items-end\">\n              {(searchTerm || statusFilter || riskLevelFilter) && (\n                <Button variant=\"outline\" onClick={clearFilters}>\n                  Clear Filters\n                </Button>\n              )}\n            </div>\n          </div>\n        </CardContent>\n      </Card>\n\n      {/* Compliance Tabs */}\n      <Tabs value={activeTab} onValueChange={handleTabChange}>\n        <TabsList className=\"grid w-full grid-cols-3\">\n          <TabsTrigger value=\"overview\">Overview</TabsTrigger>\n          <TabsTrigger value=\"documents\">KYC Documents</TabsTrigger>\n          <TabsTrigger value=\"assessments\">Risk Assessments</TabsTrigger>\n        </TabsList>\n        \n        <TabsContent value=\"overview\" className=\"mt-6\">\n          <Card>\n            <CardHeader>\n              <CardTitle>Recent Activity</CardTitle>\n              <CardDescription>\n                Latest KYC documents and compliance activities\n              </CardDescription>\n            </CardHeader>\n            <CardContent>\n              {loading ? (\n                <div className=\"flex items-center justify-center p-8\">\n                  <Loader2 className=\"h-8 w-8 animate-spin\" />\n                </div>\n              ) : kycDocuments.length === 0 ? (\n                <div className=\"text-center p-8\">\n                  <FileText className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n                  <h3 className=\"text-lg font-semibold mb-2\">No Recent Activity</h3>\n                  <p className=\"text-muted-foreground\">\n                    No recent compliance activities to display\n                  </p>\n                </div>\n              ) : (\n                <Table>\n                  <TableHeader>\n                    <TableRow>\n                      <TableHead>Document Type</TableHead>\n                      <TableHead>Client</TableHead>\n                      <TableHead>Status</TableHead>\n                      <TableHead>Submitted</TableHead>\n                      <TableHead className=\"text-right\">Actions</TableHead>\n                    </TableRow>\n                  </TableHeader>\n                  <TableBody>\n                    {kycDocuments.slice(0, 5).map((doc) => (\n                      <TableRow key={doc.id}>\n                        <TableCell>\n                          <div className=\"font-medium\">\n                            {kycUtils.getDocumentTypeDisplayName(doc.document_type)}\n                          </div>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"flex items-center gap-2\">\n                            <User className=\"h-4 w-4 text-muted-foreground\" />\n                            <span>{doc.client?.name}</span>\n                          </div>\n                        </TableCell>\n                        <TableCell>\n                          <Badge className={kycUtils.getKYCStatusColor(doc.status)}>\n                            {kycUtils.getKYCStatusDisplayName(doc.status)}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"text-sm text-muted-foreground\">\n                            {formatDateTime(doc.created_at)}\n                          </div>\n                        </TableCell>\n                        <TableCell className=\"text-right\">\n                          <Button\n                            variant=\"ghost\"\n                            size=\"sm\"\n                            onClick={() => handleViewDocument(doc.id)}\n                          >\n                            <Eye className=\"h-4 w-4\" />\n                          </Button>\n                        </TableCell>\n                      </TableRow>\n                    ))}\n                  </TableBody>\n                </Table>\n              )}\n            </CardContent>\n          </Card>\n        </TabsContent>\n        \n        <TabsContent value=\"documents\" className=\"mt-6\">\n          <Card>\n            <CardContent className=\"p-0\">\n              {loading ? (\n                <div className=\"flex items-center justify-center p-8\">\n                  <Loader2 className=\"h-8 w-8 animate-spin\" />\n                </div>\n              ) : kycDocuments.length === 0 ? (\n                <div className=\"text-center p-8\">\n                  <FileText className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n                  <h3 className=\"text-lg font-semibold mb-2\">No KYC Documents Found</h3>\n                  <p className=\"text-muted-foreground\">\n                    No KYC documents match your current filters\n                  </p>\n                </div>\n              ) : (\n                <Table>\n                  <TableHeader>\n                    <TableRow>\n                      <TableHead>Document Type</TableHead>\n                      <TableHead>Client</TableHead>\n                      <TableHead>Status</TableHead>\n                      <TableHead>Country</TableHead>\n                      <TableHead>Submitted</TableHead>\n                      <TableHead>Reviewed By</TableHead>\n                      <TableHead className=\"text-right\">Actions</TableHead>\n                    </TableRow>\n                  </TableHeader>\n                  <TableBody>\n                    {kycDocuments.map((doc) => (\n                      <TableRow key={doc.id}>\n                        <TableCell>\n                          <div className=\"font-medium\">\n                            {kycUtils.getDocumentTypeDisplayName(doc.document_type)}\n                          </div>\n                          {doc.document_number && (\n                            <div className=\"text-xs text-muted-foreground\">\n                              {doc.document_number}\n                            </div>\n                          )}\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"flex items-center gap-2\">\n                            <User className=\"h-4 w-4 text-muted-foreground\" />\n                            <div>\n                              <div className=\"font-medium\">{doc.client?.name}</div>\n                              <div className=\"text-xs text-muted-foreground\">\n                                {doc.client?.email}\n                              </div>\n                            </div>\n                          </div>\n                        </TableCell>\n                        <TableCell>\n                          <Badge className={kycUtils.getKYCStatusColor(doc.status)}>\n                            {kycUtils.getKYCStatusDisplayName(doc.status)}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          <span>{doc.issuing_country}</span>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"text-sm text-muted-foreground\">\n                            {formatDateTime(doc.created_at)}\n                          </div>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"text-sm\">\n                            {doc.reviewed_by_user?.name || 'Not reviewed'}\n                          </div>\n                        </TableCell>\n                        <TableCell className=\"text-right\">\n                          <div className=\"flex items-center justify-end gap-2\">\n                            <Button\n                              variant=\"ghost\"\n                              size=\"sm\"\n                              onClick={() => handleViewDocument(doc.id)}\n                            >\n                              <Eye className=\"h-4 w-4\" />\n                            </Button>\n                            <Button variant=\"ghost\" size=\"sm\">\n                              <Download className=\"h-4 w-4\" />\n                            </Button>\n                          </div>\n                        </TableCell>\n                      </TableRow>\n                    ))}\n                  </TableBody>\n                </Table>\n              )}\n            </CardContent>\n          </Card>\n        </TabsContent>\n        \n        <TabsContent value=\"assessments\" className=\"mt-6\">\n          <Card>\n            <CardContent className=\"p-0\">\n              {loading ? (\n                <div className=\"flex items-center justify-center p-8\">\n                  <Loader2 className=\"h-8 w-8 animate-spin\" />\n                </div>\n              ) : assessments.length === 0 ? (\n                <div className=\"text-center p-8\">\n                  <Shield className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n                  <h3 className=\"text-lg font-semibold mb-2\">No Risk Assessments Found</h3>\n                  <p className=\"text-muted-foreground\">\n                    No risk assessments match your current filters\n                  </p>\n                </div>\n              ) : (\n                <Table>\n                  <TableHeader>\n                    <TableRow>\n                      <TableHead>Client</TableHead>\n                      <TableHead>Assessment Type</TableHead>\n                      <TableHead>Risk Score</TableHead>\n                      <TableHead>Risk Level</TableHead>\n                      <TableHead>Next Review</TableHead>\n                      <TableHead>Assessed By</TableHead>\n                      <TableHead className=\"text-right\">Actions</TableHead>\n                    </TableRow>\n                  </TableHeader>\n                  <TableBody>\n                    {assessments.map((assessment) => (\n                      <TableRow key={assessment.id}>\n                        <TableCell>\n                          <div className=\"flex items-center gap-2\">\n                            <User className=\"h-4 w-4 text-muted-foreground\" />\n                            <div>\n                              <div className=\"font-medium\">{assessment.client?.name}</div>\n                              <div className=\"text-xs text-muted-foreground\">\n                                {assessment.client?.country}\n                              </div>\n                            </div>\n                          </div>\n                        </TableCell>\n                        <TableCell>\n                          <Badge variant=\"secondary\">\n                            {assessment.assessment_type.replace('_', ' ').toUpperCase()}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"font-medium\">{assessment.overall_risk_score}/100</div>\n                        </TableCell>\n                        <TableCell>\n                          <Badge className={kycUtils.getRiskLevelColor(assessment.risk_level)}>\n                            {assessment.risk_level.toUpperCase()}\n                          </Badge>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"flex items-center gap-2\">\n                            <Calendar className=\"h-4 w-4 text-muted-foreground\" />\n                            <span className=\"text-sm\">\n                              {formatDateTime(assessment.next_review_date)}\n                            </span>\n                          </div>\n                        </TableCell>\n                        <TableCell>\n                          <div className=\"text-sm\">\n                            {assessment.assessed_by_user?.name}\n                          </div>\n                        </TableCell>\n                        <TableCell className=\"text-right\">\n                          <Button variant=\"ghost\" size=\"sm\">\n                            <Eye className=\"h-4 w-4\" />\n                          </Button>\n                        </TableCell>\n                      </TableRow>\n                    ))}\n                  </TableBody>\n                </Table>\n              )}\n            </CardContent>\n          </Card>\n        </TabsContent>\n      </Tabs>\n\n      {/* Pagination */}\n      {totalPages > 1 && (\n        <div className=\"flex items-center justify-between\">\n          <div className=\"text-sm text-muted-foreground\">\n            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, kycDocuments.length)} items\n          </div>\n          <div className=\"flex items-center gap-2\">\n            <Button\n              variant=\"outline\"\n              size=\"sm\"\n              onClick={() => setPage(page - 1)}\n              disabled={page === 1}\n            >\n              Previous\n            </Button>\n            <div className=\"flex items-center gap-1\">\n              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {\n                const pageNum = Math.max(1, Math.min(totalPages - 4, page - 2)) + i\n                return (\n                  <Button\n                    key={pageNum}\n                    variant={pageNum === page ? \"default\" : \"outline\"}\n                    size=\"sm\"\n                    onClick={() => setPage(pageNum)}\n                    className={pageNum === page ? \"bg-g1-primary hover:bg-g1-primary/90\" : \"\"}\n                  >\n                    {pageNum}\n                  </Button>\n                )\n              })}\n            </div>\n            <Button\n              variant=\"outline\"\n              size=\"sm\"\n              onClick={() => setPage(page + 1)}\n              disabled={page === totalPages}\n            >\n              Next\n            </Button>\n          </div>\n        </div>\n      )}\n    </div>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { 
+  Search, 
+  Filter, 
+  Plus, 
+  Eye, 
+  Download,
+  Loader2,
+  Shield,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  FileText,
+  User,
+  TrendingUp,
+  TrendingDown,
+  Calendar
+} from 'lucide-react'
+import { ClientWithRelations } from '@/types'
+import { kycUtils } from '@/lib/kyc-utils'
+import { formatDateTime } from '@/lib/utils'
+import { usePermissions } from '@/contexts/auth-context'
+
+interface ComplianceDashboardProps {
+  clientId?: string
+}
+
+export function ComplianceDashboard({ clientId }: ComplianceDashboardProps) {
+  const [kycDocuments, setKYCDocuments] = useState<any[]>([])
+  const [assessments, setAssessments] = useState<any[]>([])
+  const [clients, setClients] = useState<ClientWithRelations[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [riskLevelFilter, setRiskLevelFilter] = useState('')
+  const [activeTab, setActiveTab] = useState('overview')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [complianceStats, setComplianceStats] = useState({
+    totalDocuments: 0,
+    approvedDocuments: 0,
+    rejectedDocuments: 0,
+    pendingDocuments: 0,
+    approvalRate: 0,
+    averageRiskScore: 0,
+    riskDistribution: { low: 0, medium: 0, high: 0 }
+  })
+  
+  const router = useRouter()
+  const permissions = usePermissions()
+  const limit = 10
+
+  useEffect(() => {
+    fetchComplianceData()
+  }, [page, searchTerm, statusFilter, riskLevelFilter, activeTab, clientId])
+
+  const fetchComplianceData = async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(searchTerm && { search: searchTerm }),
+        ...(statusFilter && { status: statusFilter }),
+        ...(riskLevelFilter && { risk_level: riskLevelFilter }),
+        ...(clientId && { client_id: clientId })
+      })
+      
+      let endpoint = '/api/kyc/documents'
+      if (activeTab === 'assessments') endpoint = '/api/compliance/assessments'
+      
+      const response = await fetch(`${endpoint}?${params}`)
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch compliance data')
+      }
+      
+      if (activeTab === 'documents' || activeTab === 'overview') {
+        setKYCDocuments(result.data)
+      } else if (activeTab === 'assessments') {
+        setAssessments(result.data)
+      }
+      
+      setTotalPages(result.total_pages)
+      
+      // Fetch overview stats
+      if (activeTab === 'overview') {
+        await fetchComplianceStats()
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchComplianceStats = async () => {
+    try {
+      const [docsRes, assessmentsRes] = await Promise.all([
+        fetch(`/api/kyc/documents?limit=1000${clientId ? `&client_id=${clientId}` : ''}`),
+        fetch(`/api/compliance/assessments?limit=1000${clientId ? `&client_id=${clientId}` : ''}`)
+      ])
+      
+      const [docsData, assessmentsData] = await Promise.all([
+        docsRes.json(),
+        assessmentsRes.json()
+      ])
+      
+      if (docsRes.ok && assessmentsRes.ok) {
+        const stats = kycUtils.generateComplianceReport(docsData.data, assessmentsData.data)
+        setComplianceStats(stats)
+      }
+    } catch (error) {
+      console.error('Failed to fetch compliance stats:', error)
+    }
+  }
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value)
+    setPage(1)
+  }
+
+  const handleStatusFilter = (value: string) => {
+    setStatusFilter(value === 'all' ? '' : value)
+    setPage(1)
+  }
+
+  const handleRiskLevelFilter = (value: string) => {
+    setRiskLevelFilter(value === 'all' ? '' : value)
+    setPage(1)
+  }
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setStatusFilter('')
+    setRiskLevelFilter('')
+    setPage(1)
+  }
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    setPage(1)
+    setStatusFilter('')
+    setRiskLevelFilter('')
+  }
+
+  const handleViewDocument = (id: string) => {
+    router.push(`/dashboard/compliance/documents/${id}`)
+  }
+
+  const handleCreateAssessment = () => {
+    router.push('/dashboard/compliance/assessments/create')
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-600">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>{error}</p>
+            <Button onClick={fetchComplianceData} className="mt-4">
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Compliance Management</h2>
+          <p className="text-muted-foreground">
+            Monitor KYC documents, risk assessments, and compliance status
+          </p>
+        </div>
+        {permissions.canViewCompliance() && (
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleCreateAssessment}
+              className="bg-g1-primary hover:bg-g1-primary/90"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New Assessment
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Compliance Overview Stats */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-500" />
+                <div>
+                  <div className="text-2xl font-bold">{complianceStats.totalDocuments}</div>
+                  <div className="text-sm text-muted-foreground">Total Documents</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <div>
+                  <div className="text-2xl font-bold">{complianceStats.approvalRate.toFixed(1)}%</div>
+                  <div className="text-sm text-muted-foreground">Approval Rate</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-orange-500" />
+                <div>
+                  <div className="text-2xl font-bold">{complianceStats.averageRiskScore}</div>
+                  <div className="text-sm text-muted-foreground">Avg Risk Score</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-yellow-500" />
+                <div>
+                  <div className="text-2xl font-bold">{complianceStats.pendingDocuments}</div>
+                  <div className="text-sm text-muted-foreground">Pending Review</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Risk Distribution */}
+      {activeTab === 'overview' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Risk Level Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600">{complianceStats.riskDistribution.low}</div>
+                <div className="text-sm text-muted-foreground">Low Risk</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-yellow-600">{complianceStats.riskDistribution.medium}</div>
+                <div className="text-sm text-muted-foreground">Medium Risk</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-red-600">{complianceStats.riskDistribution.high}</div>
+                <div className="text-sm text-muted-foreground">High Risk</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Search</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+              <Select value={statusFilter || 'all'} onValueChange={handleStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {kycUtils.getAllKYCStatuses().map((status) => (
+                    <SelectItem key={status.value} value={status.value}>
+                      {status.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Risk Level Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Risk Level</label>
+              <Select value={riskLevelFilter || 'all'} onValueChange={handleRiskLevelFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All levels" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Levels</SelectItem>
+                  <SelectItem value="low">Low Risk</SelectItem>
+                  <SelectItem value="medium">Medium Risk</SelectItem>
+                  <SelectItem value="high">High Risk</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Clear Filters */}
+            <div className="flex items-end">
+              {(searchTerm || statusFilter || riskLevelFilter) && (
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Compliance Tabs */}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="documents">KYC Documents</TabsTrigger>
+          <TabsTrigger value="assessments">Risk Assessments</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="overview" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>
+                Latest KYC documents and compliance activities
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : kycDocuments.length === 0 ? (
+                <div className="text-center p-8">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No Recent Activity</h3>
+                  <p className="text-muted-foreground">
+                    No recent compliance activities to display
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Document Type</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {kycDocuments.slice(0, 5).map((doc) => (
+                      <TableRow key={doc.id}>
+                        <TableCell>
+                          <div className="font-medium">
+                            {kycUtils.getDocumentTypeDisplayName(doc.document_type)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span>{doc.client?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={kycUtils.getKYCStatusColor(doc.status)}>
+                            {kycUtils.getKYCStatusDisplayName(doc.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm text-muted-foreground">
+                            {formatDateTime(doc.created_at)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewDocument(doc.id)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="documents" className="mt-6">
+          <Card>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : kycDocuments.length === 0 ? (
+                <div className="text-center p-8">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No KYC Documents Found</h3>
+                  <p className="text-muted-foreground">
+                    No KYC documents match your current filters
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Document Type</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Country</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Reviewed By</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {kycDocuments.map((doc) => (
+                      <TableRow key={doc.id}>
+                        <TableCell>
+                          <div className="font-medium">
+                            {kycUtils.getDocumentTypeDisplayName(doc.document_type)}
+                          </div>
+                          {doc.document_number && (
+                            <div className="text-xs text-muted-foreground">
+                              {doc.document_number}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium">{doc.client?.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {doc.client?.email}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={kycUtils.getKYCStatusColor(doc.status)}>
+                            {kycUtils.getKYCStatusDisplayName(doc.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span>{doc.issuing_country}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm text-muted-foreground">
+                            {formatDateTime(doc.created_at)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {doc.reviewed_by_user?.name || 'Not reviewed'}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewDocument(doc.id)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="assessments" className="mt-6">
+          <Card>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : assessments.length === 0 ? (
+                <div className="text-center p-8">
+                  <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No Risk Assessments Found</h3>
+                  <p className="text-muted-foreground">
+                    No risk assessments match your current filters
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Assessment Type</TableHead>
+                      <TableHead>Risk Score</TableHead>
+                      <TableHead>Risk Level</TableHead>
+                      <TableHead>Next Review</TableHead>
+                      <TableHead>Assessed By</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {assessments.map((assessment) => (
+                      <TableRow key={assessment.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium">{assessment.client?.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {assessment.client?.country}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {assessment.assessment_type.replace('_', ' ').toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{assessment.overall_risk_score}/100</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={kycUtils.getRiskLevelColor(assessment.risk_level)}>
+                            {assessment.risk_level.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">
+                              {formatDateTime(assessment.next_review_date)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {assessment.assessed_by_user?.name}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, kycDocuments.length)} items
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page - 1)}
+              disabled={page === 1}
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNum = Math.max(1, Math.min(totalPages - 4, page - 2)) + i
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={pageNum === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPage(pageNum)}
+                    className={pageNum === page ? "bg-g1-primary hover:bg-g1-primary/90" : ""}
+                  >
+                    {pageNum}
+                  </Button>
+                )
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page + 1)}
+              disabled={page === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

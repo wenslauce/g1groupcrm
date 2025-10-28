@@ -1,1 +1,19 @@
-import { ProtectedRoute } from '@/components/auth/protected-route'\nimport { FinancialDashboard } from '@/components/financial/financial-dashboard'\n\nexport default function FinancialPage() {\n  return (\n    <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>\n      <div className=\"space-y-6\">\n        <div>\n          <h1 className=\"text-3xl font-bold tracking-tight\">Financial Management</h1>\n          <p className=\"text-muted-foreground\">\n            Comprehensive financial document management and reporting\n          </p>\n        </div>\n\n        <FinancialDashboard />\n      </div>\n    </ProtectedRoute>\n  )\n}"
+import { ProtectedRoute } from '@/components/auth/protected-route'
+import { FinancialDashboard } from '@/components/financial/financial-dashboard'
+
+export default function FinancialPage() {
+  return (
+    <ProtectedRoute requiredRoles={['admin', 'finance', 'operations', 'compliance']}>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Financial Management</h1>
+          <p className="text-muted-foreground">
+            Comprehensive financial document management and reporting
+          </p>
+        </div>
+
+        <FinancialDashboard />
+      </div>
+    </ProtectedRoute>
+  )
+}

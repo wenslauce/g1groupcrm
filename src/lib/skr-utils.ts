@@ -75,6 +75,20 @@ export const skrUtils = {
     return this.generateHash(hashInput)
   },
 
+  validateSKRHash(skr: any, providedHash: string): boolean {
+    if (!skr.hash || !providedHash) return false
+    
+    // Generate expected hash
+    const expectedHash = this.generateSKRHash({
+      skr_number: skr.skr_number,
+      client_id: skr.client_id,
+      asset_id: skr.asset_id,
+      issue_date: skr.issue_date
+    })
+    
+    return expectedHash === providedHash
+  },
+
   getAssetTypes(): string[] {
     return [
       'Precious Metal',

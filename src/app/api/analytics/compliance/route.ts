@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
     // Set default date range if not provided
     const dateRange = filters.date_range || analyticsUtils.getDateRange('year')
     
+    // Normalize date range to ensure consistent format
+    const startDate = 'start_date' in dateRange ? dateRange.start_date : dateRange.start.toISOString()
+    const endDate = 'end_date' in dateRange ? dateRange.end_date : dateRange.end.toISOString()
+    
     // Fetch compliance-related data
     const [clientsResult, auditLogsResult, complianceAssessmentsResult] = await Promise.all([
       // Clients with compliance status
@@ -41,8 +45,8 @@ export async function GET(request: NextRequest) {
           created_at,
           updated_at
         `)
-        .gte('created_at', dateRange.start_date)
-        .lte('created_at', dateRange.end_date),
+        .gte('created_at', startDate)
+        .lte('created_at', endDate),
       
       // Audit logs for compliance activities
       supabase
@@ -67,8 +71,8 @@ export async function GET(request: NextRequest) {
           'client_approved',
           'client_rejected'
         ])
-        .gte('created_at', dateRange.start_date)
-        .lte('created_at', dateRange.end_date)
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
         .order('created_at', { ascending: false }),
       
       // Compliance assessments (if table exists)
@@ -84,8 +88,8 @@ export async function GET(request: NextRequest) {
           created_at,
           updated_at
         `)
-        .gte('created_at', dateRange.start_date)
-        .lte('created_at', dateRange.end_date)
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
         .order('created_at', { ascending: false })
     ])
     
@@ -161,8 +165,8 @@ export async function GET(request: NextRequest) {
     
     // Compliance activity timeline
     const timePoints = analyticsUtils.generateTimeSeriesPoints(
-      dateRange.start_date,
-      dateRange.end_date,
+      startDate,
+      endDate,
       filters.group_by
     )
     
@@ -210,8 +214,9 @@ export async function GET(request: NextRequest) {
     
     // Compliance team activity
     const teamActivity = auditLogs.reduce((acc, log) => {
-      const userName = log.user_profiles?.full_name || 'Unknown'
-      const userRole = log.user_profiles?.role || 'unknown'
+      const userProfile = Array.isArray(log.user_profiles) ? log.user_profiles[0] : log.user_profiles
+      const userName = userProfile?.full_name || 'Unknown'
+      const userRole = userProfile?.role || 'unknown'
       
       if (!acc[userName]) {
         acc[userName] = {
@@ -238,16 +243,19 @@ export async function GET(request: NextRequest) {
       .slice(0, 10)
     
     // Recent compliance activities
-    const recentActivities = auditLogs.slice(0, 20).map(log => ({
-      id: log.id,
-      action: log.action,
-      resource_type: log.resource_type,
-      resource_id: log.resource_id,
-      user_name: log.user_profiles?.full_name || 'Unknown',
-      user_role: log.user_profiles?.role || 'unknown',
-      details: log.details,
-      created_at: log.created_at
-    }))
+    const recentActivities = auditLogs.slice(0, 20).map(log => {
+      const userProfile = Array.isArray(log.user_profiles) ? log.user_profiles[0] : log.user_profiles
+      return {
+        id: log.id,
+        action: log.action,
+        resource_type: log.resource_type,
+        resource_id: log.resource_id,
+        user_name: userProfile?.full_name || 'Unknown',
+        user_role: userProfile?.role || 'unknown',
+        details: log.details,
+        created_at: log.created_at
+      }
+    })
     
     // Compliance issues and alerts
     const complianceIssues = {

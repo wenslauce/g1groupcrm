@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
     // Set default date range if not provided
     const dateRange = filters.date_range || analyticsUtils.getDateRange('year')
     
+    // Normalize date range to ensure consistent format
+    const startDate = 'start_date' in dateRange ? dateRange.start_date : dateRange.start.toISOString()
+    const endDate = 'end_date' in dateRange ? dateRange.end_date : dateRange.end.toISOString()
+    
     // Fetch financial data
     const [invoicesResult, receiptsResult, creditNotesResult] = await Promise.all([
       // Invoices
@@ -41,8 +45,8 @@ export async function GET(request: NextRequest) {
           created_at,
           client:clients(id, name, type, country)
         `)
-        .gte('created_at', dateRange.start_date)
-        .lte('created_at', dateRange.end_date),
+        .gte('created_at', startDate)
+        .lte('created_at', endDate),
       
       // Receipts
       supabase
@@ -56,8 +60,8 @@ export async function GET(request: NextRequest) {
           created_at,
           invoice:invoices(id, invoice_number, client_id)
         `)
-        .gte('created_at', dateRange.start_date)
-        .lte('created_at', dateRange.end_date),
+        .gte('created_at', startDate)
+        .lte('created_at', endDate),
       
       // Credit Notes
       supabase
@@ -71,8 +75,8 @@ export async function GET(request: NextRequest) {
           created_at,
           reference_invoice:invoices(id, invoice_number, client_id)
         `)
-        .gte('created_at', dateRange.start_date)
-        .lte('created_at', dateRange.end_date)
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
     ])
     
     // Check for errors
@@ -122,7 +126,8 @@ export async function GET(request: NextRequest) {
     
     // Client type revenue distribution
     const clientTypeRevenue = invoices.reduce((acc, inv) => {
-      const clientType = inv.client?.type || 'unknown'
+      const client = Array.isArray(inv.client) ? inv.client[0] : inv.client
+      const clientType = client?.type || 'unknown'
       acc[clientType] = (acc[clientType] || 0) + (inv.amount || 0)
       return acc
     }, {} as Record<string, number>)
@@ -135,8 +140,8 @@ export async function GET(request: NextRequest) {
     
     // Generate time series data
     const timePoints = analyticsUtils.generateTimeSeriesPoints(
-      dateRange.start_date,
-      dateRange.end_date,
+      startDate,
+      endDate,
       filters.group_by
     )
     
@@ -189,14 +194,15 @@ export async function GET(request: NextRequest) {
     
     // Top clients by revenue
     const clientRevenue = invoices.reduce((acc, inv) => {
-      const clientId = inv.client?.id || 'unknown'
-      const clientName = inv.client?.name || 'Unknown'
+      const client = Array.isArray(inv.client) ? inv.client[0] : inv.client
+      const clientId = client?.id || 'unknown'
+      const clientName = client?.name || 'Unknown'
       
       if (!acc[clientId]) {
         acc[clientId] = {
           client_id: clientId,
           client_name: clientName,
-          client_type: inv.client?.type || 'unknown',
+          client_type: client?.type || 'unknown',
           total_invoiced: 0,
           total_paid: 0,
           invoice_count: 0
@@ -211,7 +217,8 @@ export async function GET(request: NextRequest) {
     
     // Add payment data to client revenue
     receipts.forEach(rec => {
-      const clientId = rec.invoice?.client_id
+      const invoice = Array.isArray(rec.invoice) ? rec.invoice[0] : rec.invoice
+      const clientId = invoice?.client_id
       if (clientId && clientRevenue[clientId]) {
         clientRevenue[clientId].total_paid += rec.amount || 0
       }
@@ -247,16 +254,19 @@ export async function GET(request: NextRequest) {
     
     // Recent transactions
     const recentTransactions = [
-      ...invoices.slice(0, 10).map(inv => ({
-        id: inv.id,
-        type: 'invoice',
-        number: inv.invoice_number,
-        amount: inv.amount,
-        currency: inv.currency,
-        status: inv.status,
-        client_name: inv.client?.name,
-        date: inv.created_at
-      })),
+      ...invoices.slice(0, 10).map(inv => {
+        const client = Array.isArray(inv.client) ? inv.client[0] : inv.client
+        return {
+          id: inv.id,
+          type: 'invoice',
+          number: inv.invoice_number,
+          amount: inv.amount,
+          currency: inv.currency,
+          status: inv.status,
+          client_name: client?.name,
+          date: inv.created_at
+        }
+      }),
       ...receipts.slice(0, 10).map(rec => ({
         id: rec.id,
         type: 'receipt',

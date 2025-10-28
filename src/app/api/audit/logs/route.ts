@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     const { data: auditLog, error } = await supabase
       .from('audit_logs')
       .insert({
-        user_id: user.id,
+        user_id: user?.id,
         action: validatedData.action,
         resource_type: validatedData.resource_type,
         resource_id: validatedData.resource_id,

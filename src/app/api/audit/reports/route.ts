@@ -128,7 +128,8 @@ export async function POST(request: NextRequest) {
         
         switch (validatedData.group_by) {
           case 'user':
-            key = log.user_profiles?.full_name || log.user_id
+            const userProfile = Array.isArray(log.user_profiles) ? log.user_profiles[0] : log.user_profiles
+            key = userProfile?.full_name || log.user_id
             break
           case 'action':
             key = log.action
@@ -159,8 +160,8 @@ export async function POST(request: NextRequest) {
         acc[key] = {
           count: logs.length,
           unique_users: new Set(logs.map(l => l.user_id)).size,
-          actions: [...new Set(logs.map(l => l.action))],
-          resource_types: [...new Set(logs.map(l => l.resource_type))],
+          actions: Array.from(new Set(logs.map(l => l.action))),
+          resource_types: Array.from(new Set(logs.map(l => l.resource_type))),
           date_range: {
             start: logs.reduce((min, log) => log.created_at < min ? log.created_at : min, logs[0].created_at),
             end: logs.reduce((max, log) => log.created_at > max ? log.created_at : max, logs[0].created_at)
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
         return acc
       }, {} as Record<string, any>)
       
-      processedData = grouped
+      processedData = Object.values(grouped).flat()
     }
     
     // Generate overall statistics
@@ -200,17 +201,19 @@ export async function POST(request: NextRequest) {
     
     // Handle CSV format
     if (validatedData.format === 'csv') {
-      const csvData = auditLogs?.map(log => ({
+      const csvData = (auditLogs || []).map(log => {
+        const userProfile = Array.isArray(log.user_profiles) ? log.user_profiles[0] : log.user_profiles
+        return ({
         timestamp: log.created_at,
-        user: log.user_profiles?.full_name || log.user_id,
-        email: log.user_profiles?.email || '',
-        role: log.user_profiles?.role || '',
+        user: userProfile?.full_name || log.user_id,
+        email: userProfile?.email || '',
+        role: userProfile?.role || '',
         action: log.action,
         resource_type: log.resource_type,
         resource_id: log.resource_id || '',
         ip_address: log.ip_address || '',
         details: JSON.stringify(log.details || {})
-      })) || []
+      })})
       
       const csv = convertToCSV(csvData)
       
@@ -244,7 +247,8 @@ export async function POST(request: NextRequest) {
 function getMostActiveUsers(logs: any[]): Array<{ user_id: string; name: string; count: number }> {
   const userCounts = logs.reduce((acc, log) => {
     const userId = log.user_id
-    const userName = log.user_profiles?.full_name || userId
+    const userProfile = Array.isArray(log.user_profiles) ? log.user_profiles[0] : log.user_profiles
+    const userName = userProfile?.full_name || userId
     
     if (!acc[userId]) {
       acc[userId] = { user_id: userId, name: userName, count: 0 }
@@ -253,7 +257,7 @@ function getMostActiveUsers(logs: any[]): Array<{ user_id: string; name: string;
     return acc
   }, {} as Record<string, any>)
   
-  return Object.values(userCounts)
+  return Object.values(userCounts as Record<string, { user_id: string; name: string; count: number }>)
     .sort((a: any, b: any) => b.count - a.count)
     .slice(0, 10)
 }
@@ -266,9 +270,9 @@ function getMostCommonActions(logs: any[]): Array<{ action: string; count: numbe
     }
     acc[action].count++
     return acc
-  }, {} as Record<string, any>)
+  }, {} as Record<string, { action: string; count: number }>)
   
-  return Object.values(actionCounts)
+  return Object.values(actionCounts as Record<string, { action: string; count: number }>)
     .sort((a: any, b: any) => b.count - a.count)
     .slice(0, 10)
 }

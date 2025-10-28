@@ -1,1 +1,409 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { useRouter } from 'next/navigation'\nimport { Button } from '@/components/ui/button'\nimport { Input } from '@/components/ui/input'\nimport { Badge } from '@/components/ui/badge'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'\nimport { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'\nimport { \n  Search, \n  Filter, \n  Plus, \n  Eye, \n  Download,\n  Loader2,\n  FileText,\n  Calendar,\n  User,\n  Package\n} from 'lucide-react'\nimport { SKRWithRelations, ClientWithRelations } from '@/types'\nimport { skrUtils } from '@/lib/skr-utils'\nimport { clientUtils } from '@/lib/client-utils'\nimport { formatCurrency, formatDateTime } from '@/lib/utils'\nimport { usePermissions } from '@/contexts/auth-context'\n\ninterface SKRListProps {\n  showCreateButton?: boolean\n  clientId?: string\n}\n\nexport function SKRList({ showCreateButton = true, clientId }: SKRListProps) {\n  const [skrs, setSKRs] = useState<SKRWithRelations[]>([])\n  const [clients, setClients] = useState<ClientWithRelations[]>([])\n  const [loading, setLoading] = useState(true)\n  const [error, setError] = useState('')\n  const [searchTerm, setSearchTerm] = useState('')\n  const [statusFilter, setStatusFilter] = useState('')\n  const [clientFilter, setClientFilter] = useState(clientId || '')\n  const [dateFromFilter, setDateFromFilter] = useState('')\n  const [dateToFilter, setDateToFilter] = useState('')\n  const [page, setPage] = useState(1)\n  const [totalPages, setTotalPages] = useState(1)\n  const [totalCount, setTotalCount] = useState(0)\n  \n  const router = useRouter()\n  const permissions = usePermissions()\n  const limit = 10\n\n  useEffect(() => {\n    fetchSKRs()\n    if (!clientId) {\n      fetchClients()\n    }\n  }, [page, searchTerm, statusFilter, clientFilter, dateFromFilter, dateToFilter, clientId])\n\n  const fetchSKRs = async () => {\n    setLoading(true)\n    try {\n      const params = new URLSearchParams({\n        page: page.toString(),\n        limit: limit.toString(),\n        ...(searchTerm && { search: searchTerm }),\n        ...(statusFilter && { status: statusFilter }),\n        ...(clientFilter && { client_id: clientFilter }),\n        ...(dateFromFilter && { date_from: dateFromFilter }),\n        ...(dateToFilter && { date_to: dateToFilter })\n      })\n      \n      const response = await fetch(`/api/skrs?${params}`)\n      const result = await response.json()\n      \n      if (!response.ok) {\n        throw new Error(result.error || 'Failed to fetch SKRs')\n      }\n      \n      setSKRs(result.data)\n      setTotalPages(result.total_pages)\n      setTotalCount(result.count)\n    } catch (error) {\n      setError(error instanceof Error ? error.message : 'An error occurred')\n    } finally {\n      setLoading(false)\n    }\n  }\n\n  const fetchClients = async () => {\n    try {\n      const response = await fetch('/api/clients?limit=100')\n      const result = await response.json()\n      \n      if (response.ok) {\n        setClients(result.data)\n      }\n    } catch (error) {\n      console.error('Failed to fetch clients:', error)\n    }\n  }\n\n  const handleSearch = (value: string) => {\n    setSearchTerm(value)\n    setPage(1)\n  }\n\n  const handleStatusFilter = (value: string) => {\n    setStatusFilter(value === 'all' ? '' : value)\n    setPage(1)\n  }\n\n  const handleClientFilter = (value: string) => {\n    setClientFilter(value === 'all' ? '' : value)\n    setPage(1)\n  }\n\n  const clearFilters = () => {\n    setSearchTerm('')\n    setStatusFilter('')\n    setClientFilter(clientId || '')\n    setDateFromFilter('')\n    setDateToFilter('')\n    setPage(1)\n  }\n\n  const handleViewSKR = (skrId: string) => {\n    router.push(`/dashboard/skrs/${skrId}`)\n  }\n\n  const handleCreateSKR = () => {\n    router.push('/dashboard/skrs/create')\n  }\n\n  if (error) {\n    return (\n      <Card>\n        <CardContent className=\"p-6\">\n          <div className=\"text-center text-red-600\">\n            <FileText className=\"h-12 w-12 mx-auto mb-4 opacity-50\" />\n            <p>{error}</p>\n            <Button onClick={fetchSKRs} className=\"mt-4\">\n              Try Again\n            </Button>\n          </div>\n        </CardContent>\n      </Card>\n    )\n  }\n\n  return (\n    <div className=\"space-y-6\">\n      {/* Header */}\n      <div className=\"flex items-center justify-between\">\n        <div>\n          <h2 className=\"text-2xl font-bold tracking-tight\">SKRs</h2>\n          <p className=\"text-muted-foreground\">\n            {totalCount} total SKR{totalCount !== 1 ? 's' : ''}\n          </p>\n        </div>\n        {showCreateButton && permissions.canCreateSKRs() && (\n          <Button onClick={handleCreateSKR} className=\"bg-g1-primary hover:bg-g1-primary/90\">\n            <Plus className=\"mr-2 h-4 w-4\" />\n            Create SKR\n          </Button>\n        )}\n      </div>\n\n      {/* Filters */}\n      <Card>\n        <CardHeader>\n          <CardTitle className=\"flex items-center gap-2\">\n            <Filter className=\"h-5 w-5\" />\n            Filters\n          </CardTitle>\n          <CardDescription>\n            Search and filter SKRs by various criteria\n          </CardDescription>\n        </CardHeader>\n        <CardContent>\n          <div className=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4\">\n            {/* Search */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Search</label>\n              <div className=\"relative\">\n                <Search className=\"absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground\" />\n                <Input\n                  placeholder=\"Search SKRs...\"\n                  value={searchTerm}\n                  onChange={(e) => handleSearch(e.target.value)}\n                  className=\"pl-10\"\n                />\n              </div>\n            </div>\n\n            {/* Status Filter */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Status</label>\n              <Select value={statusFilter || 'all'} onValueChange={handleStatusFilter}>\n                <SelectTrigger>\n                  <SelectValue placeholder=\"All statuses\" />\n                </SelectTrigger>\n                <SelectContent>\n                  <SelectItem value=\"all\">All Statuses</SelectItem>\n                  {skrUtils.getAllStatuses().map((status) => (\n                    <SelectItem key={status.value} value={status.value}>\n                      {status.label}\n                    </SelectItem>\n                  ))}\n                </SelectContent>\n              </Select>\n            </div>\n\n            {/* Client Filter */}\n            {!clientId && (\n              <div className=\"space-y-2\">\n                <label className=\"text-sm font-medium\">Client</label>\n                <Select value={clientFilter || 'all'} onValueChange={handleClientFilter}>\n                  <SelectTrigger>\n                    <SelectValue placeholder=\"All clients\" />\n                  </SelectTrigger>\n                  <SelectContent>\n                    <SelectItem value=\"all\">All Clients</SelectItem>\n                    {clients.map((client) => (\n                      <SelectItem key={client.id} value={client.id}>\n                        {client.name}\n                      </SelectItem>\n                    ))}\n                  </SelectContent>\n                </Select>\n              </div>\n            )}\n\n            {/* Date Range */}\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Date Range</label>\n              <div className=\"flex gap-2\">\n                <Input\n                  type=\"date\"\n                  value={dateFromFilter}\n                  onChange={(e) => setDateFromFilter(e.target.value)}\n                  className=\"text-xs\"\n                />\n                <Input\n                  type=\"date\"\n                  value={dateToFilter}\n                  onChange={(e) => setDateToFilter(e.target.value)}\n                  className=\"text-xs\"\n                />\n              </div>\n            </div>\n          </div>\n\n          {/* Clear Filters */}\n          {(searchTerm || statusFilter || (clientFilter && clientFilter !== clientId) || dateFromFilter || dateToFilter) && (\n            <div className=\"mt-4 pt-4 border-t\">\n              <Button variant=\"outline\" size=\"sm\" onClick={clearFilters}>\n                Clear Filters\n              </Button>\n            </div>\n          )}\n        </CardContent>\n      </Card>\n\n      {/* SKR Table */}\n      <Card>\n        <CardContent className=\"p-0\">\n          {loading ? (\n            <div className=\"flex items-center justify-center p-8\">\n              <Loader2 className=\"h-8 w-8 animate-spin\" />\n            </div>\n          ) : skrs.length === 0 ? (\n            <div className=\"text-center p-8\">\n              <FileText className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n              <h3 className=\"text-lg font-semibold mb-2\">No SKRs Found</h3>\n              <p className=\"text-muted-foreground mb-4\">\n                {searchTerm || statusFilter || clientFilter || dateFromFilter || dateToFilter\n                  ? 'No SKRs match your current filters'\n                  : 'No SKRs have been created yet'\n                }\n              </p>\n              {permissions.canCreateSKRs() && (\n                <Button onClick={handleCreateSKR} className=\"bg-g1-primary hover:bg-g1-primary/90\">\n                  <Plus className=\"mr-2 h-4 w-4\" />\n                  Create First SKR\n                </Button>\n              )}\n            </div>\n          ) : (\n            <Table>\n              <TableHeader>\n                <TableRow>\n                  <TableHead>SKR Number</TableHead>\n                  <TableHead>Client</TableHead>\n                  <TableHead>Asset</TableHead>\n                  <TableHead>Status</TableHead>\n                  <TableHead>Value</TableHead>\n                  <TableHead>Created</TableHead>\n                  <TableHead className=\"text-right\">Actions</TableHead>\n                </TableRow>\n              </TableHeader>\n              <TableBody>\n                {skrs.map((skr) => (\n                  <TableRow key={skr.id} className=\"cursor-pointer hover:bg-muted/50\">\n                    <TableCell className=\"font-mono font-medium\">\n                      {skr.skr_number}\n                    </TableCell>\n                    <TableCell>\n                      <div className=\"flex items-center gap-2\">\n                        <User className=\"h-4 w-4 text-muted-foreground\" />\n                        <div>\n                          <div className=\"font-medium\">{skr.client?.name}</div>\n                          <div className=\"text-xs text-muted-foreground\">\n                            {skr.client?.email}\n                          </div>\n                        </div>\n                      </div>\n                    </TableCell>\n                    <TableCell>\n                      <div className=\"flex items-center gap-2\">\n                        <Package className=\"h-4 w-4 text-muted-foreground\" />\n                        <div>\n                          <div className=\"font-medium\">{skr.asset?.asset_name}</div>\n                          <div className=\"text-xs text-muted-foreground\">\n                            {skr.asset?.asset_type}\n                          </div>\n                        </div>\n                      </div>\n                    </TableCell>\n                    <TableCell>\n                      <Badge className={skrUtils.getStatusColor(skr.status)}>\n                        {skrUtils.getStatusDisplayName(skr.status)}\n                      </Badge>\n                    </TableCell>\n                    <TableCell>\n                      {skr.asset && (\n                        <div className=\"font-medium\">\n                          {formatCurrency(skr.asset.declared_value, skr.asset.currency)}\n                        </div>\n                      )}\n                    </TableCell>\n                    <TableCell>\n                      <div className=\"flex items-center gap-2 text-sm text-muted-foreground\">\n                        <Calendar className=\"h-4 w-4\" />\n                        {formatDateTime(skr.created_at)}\n                      </div>\n                    </TableCell>\n                    <TableCell className=\"text-right\">\n                      <div className=\"flex items-center justify-end gap-2\">\n                        <Button\n                          variant=\"ghost\"\n                          size=\"sm\"\n                          onClick={() => handleViewSKR(skr.id)}\n                        >\n                          <Eye className=\"h-4 w-4\" />\n                        </Button>\n                        {skr.pdf_url && (\n                          <Button variant=\"ghost\" size=\"sm\">\n                            <Download className=\"h-4 w-4\" />\n                          </Button>\n                        )}\n                      </div>\n                    </TableCell>\n                  </TableRow>\n                ))}\n              </TableBody>\n            </Table>\n          )}\n        </CardContent>\n      </Card>\n\n      {/* Pagination */}\n      {totalPages > 1 && (\n        <div className=\"flex items-center justify-between\">\n          <div className=\"text-sm text-muted-foreground\">\n            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, totalCount)} of {totalCount} SKRs\n          </div>\n          <div className=\"flex items-center gap-2\">\n            <Button\n              variant=\"outline\"\n              size=\"sm\"\n              onClick={() => setPage(page - 1)}\n              disabled={page === 1}\n            >\n              Previous\n            </Button>\n            <div className=\"flex items-center gap-1\">\n              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {\n                const pageNum = Math.max(1, Math.min(totalPages - 4, page - 2)) + i\n                return (\n                  <Button\n                    key={pageNum}\n                    variant={pageNum === page ? \"default\" : \"outline\"}\n                    size=\"sm\"\n                    onClick={() => setPage(pageNum)}\n                    className={pageNum === page ? \"bg-g1-primary hover:bg-g1-primary/90\" : \"\"}\n                  >\n                    {pageNum}\n                  </Button>\n                )\n              })}\n            </div>\n            <Button\n              variant=\"outline\"\n              size=\"sm\"\n              onClick={() => setPage(page + 1)}\n              disabled={page === totalPages}\n            >\n              Next\n            </Button>\n          </div>\n        </div>\n      )}\n    </div>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import { Search, Filter, Download, Plus, Eye, Edit, Trash2, MapPin, Clock } from 'lucide-react'
+
+interface SKR {
+  id: string
+  skr_number: string
+  client_id: string
+  client_name: string
+  asset_id: string
+  asset_description: string
+  status: 'draft' | 'issued' | 'in_transit' | 'delivered' | 'cancelled'
+  issue_date: string
+  created_at: string
+  hash?: string
+  tracking_updates?: Array<{
+    id: string
+    status: string
+    location: string
+    timestamp: string
+    notes?: string
+  }>
+}
+
+interface SKRStats {
+  total: number
+  draft: number
+  issued: number
+  in_transit: number
+  delivered: number
+  cancelled: number
+}
+
+export function SKRList() {
+  const [skrs, setSkrs] = useState<SKR[]>([])
+  const [stats, setStats] = useState<SKRStats>({
+    total: 0,
+    draft: 0,
+    issued: 0,
+    in_transit: 0,
+    delivered: 0,
+    cancelled: 0
+  })
+  
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [clientFilter, setClientFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+
+  useEffect(() => {
+    fetchSKRs()
+  }, [searchTerm, statusFilter, clientFilter, dateFilter, currentPage])
+
+  const fetchSKRs = async () => {
+    try {
+      setLoading(true)
+      
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+        search: searchTerm,
+        status: statusFilter !== 'all' ? statusFilter : '',
+        client_id: clientFilter !== 'all' ? clientFilter : '',
+        date_range: dateFilter !== 'all' ? dateFilter : ''
+      })
+      
+      const response = await fetch(`/api/skrs?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setSkrs(data.skrs || [])
+        setStats(data.stats || stats)
+      }
+    } catch (error) {
+      console.error('Error fetching SKRs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      draft: 'bg-gray-100 text-gray-800',
+      issued: 'bg-blue-100 text-blue-800',
+      in_transit: 'bg-yellow-100 text-yellow-800',
+      delivered: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return <Clock className="h-4 w-4" />
+      case 'issued':
+        return <Download className="h-4 w-4" />
+      case 'in_transit':
+        return <MapPin className="h-4 w-4" />
+      case 'delivered':
+        return <Eye className="h-4 w-4" />
+      case 'cancelled':
+        return <Trash2 className="h-4 w-4" />
+      default:
+        return null
+    }
+  }
+
+  const handleViewSKR = (skrId: string) => {
+    window.open(`/dashboard/skrs/${skrId}`, '_blank')
+  }
+
+  const handleEditSKR = (skrId: string) => {
+    window.open(`/dashboard/skrs/${skrId}/edit`, '_blank')
+  }
+
+  const handleDeleteSKR = async (skrId: string) => {
+    if (confirm('Are you sure you want to delete this SKR?')) {
+      try {
+        const response = await fetch(`/api/skrs/${skrId}`, {
+          method: 'DELETE'
+        })
+        
+        if (response.ok) {
+          fetchSKRs()
+        } else {
+          alert('Failed to delete SKR')
+        }
+      } catch (error) {
+        console.error('Error deleting SKR:', error)
+        alert('Error deleting SKR')
+      }
+    }
+  }
+
+  const handleGeneratePDF = async (skrId: string) => {
+    try {
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          document_type: 'skr',
+          document_id: skrId
+        })
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `skr-${skrId}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        alert('Failed to generate PDF')
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      alert('Error generating PDF')
+    }
+  }
+
+  const handleVerifySKR = (skrNumber: string) => {
+    window.open(`/verify/skr/${skrNumber}`, '_blank')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading SKRs...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">SKR Management</h1>
+          <p className="text-gray-600">Manage Secure Keeper Receipts</p>
+        </div>
+        <div className="flex space-x-2">
+          <Button onClick={() => window.open('/dashboard/skrs/create', '_blank')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create SKR
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Draft</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Issued</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{stats.issued}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">In Transit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{stats.in_transit}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Delivered</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.delivered}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <Input
+                placeholder="Search SKRs, clients, assets..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="issued">Issued</SelectItem>
+                <SelectItem value="in_transit">In Transit</SelectItem>
+                <SelectItem value="delivered">Delivered</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Date Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="quarter">This Quarter</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* SKR Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>SKR List</CardTitle>
+          <CardDescription>View and manage all SKRs</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKR Number</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Asset</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Issue Date</TableHead>
+                <TableHead>Hash</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {skrs.map((skr) => (
+                <TableRow key={skr.id}>
+                  <TableCell className="font-medium">{skr.skr_number}</TableCell>
+                  <TableCell>{skr.client_name}</TableCell>
+                  <TableCell className="max-w-[200px] truncate">
+                    {skr.asset_description}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={getStatusColor(skr.status)}>
+                      <div className="flex items-center space-x-1">
+                        {getStatusIcon(skr.status)}
+                        <span>{skr.status.replace('_', ' ').toUpperCase()}</span>
+                      </div>
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatDate(skr.issue_date)}</TableCell>
+                  <TableCell>
+                    {skr.hash ? (
+                      <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        {skr.hash.substring(0, 8)}...
+                      </code>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewSKR(skr.id)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditSKR(skr.id)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGeneratePDF(skr.id)}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleVerifySKR(skr.skr_number)}
+                      >
+                        <Search className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteSKR(skr.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {skrs.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No SKRs found</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
