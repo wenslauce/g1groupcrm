@@ -1,1 +1,284 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { Button } from '@/components/ui/button'\nimport { Badge } from '@/components/ui/badge'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { \n  Map, \n  MapPin, \n  Navigation, \n  Maximize2, \n  Minimize2,\n  Loader2,\n  AlertTriangle,\n  Route,\n  Clock\n} from 'lucide-react'\nimport { SKRWithRelations, TrackingRecord } from '@/types'\nimport { trackingUtils } from '@/lib/tracking-utils'\nimport { formatDateTime } from '@/lib/utils'\n\ninterface TrackingMapProps {\n  skr: SKRWithRelations\n  trackingRecords: TrackingRecord[]\n  className?: string\n}\n\nexport function TrackingMap({ skr, trackingRecords, className }: TrackingMapProps) {\n  const [isFullscreen, setIsFullscreen] = useState(false)\n  const [selectedRecord, setSelectedRecord] = useState<TrackingRecord | null>(null)\n  const [mapCenter, setMapCenter] = useState({ lat: 51.5074, lng: -0.1278 }) // Default to London\n  const [mapZoom, setMapZoom] = useState(2)\n\n  // Filter records that have coordinates\n  const recordsWithCoordinates = trackingRecords.filter(\n    record => record.latitude && record.longitude\n  )\n\n  useEffect(() => {\n    // Set map center to the latest location with coordinates\n    if (recordsWithCoordinates.length > 0) {\n      const latest = recordsWithCoordinates[0]\n      if (latest.latitude && latest.longitude) {\n        setMapCenter({ lat: latest.latitude, lng: latest.longitude })\n        setMapZoom(recordsWithCoordinates.length === 1 ? 10 : 6)\n      }\n    }\n  }, [recordsWithCoordinates])\n\n  const calculateBounds = () => {\n    if (recordsWithCoordinates.length === 0) return null\n    \n    const lats = recordsWithCoordinates.map(r => r.latitude!)\n    const lngs = recordsWithCoordinates.map(r => r.longitude!)\n    \n    return {\n      north: Math.max(...lats),\n      south: Math.min(...lats),\n      east: Math.max(...lngs),\n      west: Math.min(...lngs)\n    }\n  }\n\n  const totalDistance = recordsWithCoordinates.reduce((total, record) => \n    total + (record.distanceTraveled || 0), 0\n  )\n\n  if (recordsWithCoordinates.length === 0) {\n    return (\n      <Card className={className}>\n        <CardHeader>\n          <CardTitle className=\"flex items-center gap-2\">\n            <Map className=\"h-5 w-5\" />\n            Tracking Map\n          </CardTitle>\n          <CardDescription>\n            Visual representation of asset movement\n          </CardDescription>\n        </CardHeader>\n        <CardContent>\n          <div className=\"text-center py-12\">\n            <MapPin className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n            <h3 className=\"text-lg font-semibold mb-2\">No GPS Coordinates</h3>\n            <p className=\"text-muted-foreground\">\n              No tracking records with GPS coordinates are available for this SKR.\n              Add location updates with coordinates to see the tracking map.\n            </p>\n          </div>\n        </CardContent>\n      </Card>\n    )\n  }\n\n  return (\n    <Card className={`${className} ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>\n      <CardHeader>\n        <div className=\"flex items-center justify-between\">\n          <div>\n            <CardTitle className=\"flex items-center gap-2\">\n              <Map className=\"h-5 w-5\" />\n              Tracking Map\n            </CardTitle>\n            <CardDescription>\n              {recordsWithCoordinates.length} location{recordsWithCoordinates.length !== 1 ? 's' : ''} with GPS coordinates\n            </CardDescription>\n          </div>\n          <Button\n            variant=\"outline\"\n            size=\"sm\"\n            onClick={() => setIsFullscreen(!isFullscreen)}\n          >\n            {isFullscreen ? (\n              <Minimize2 className=\"h-4 w-4\" />\n            ) : (\n              <Maximize2 className=\"h-4 w-4\" />\n            )}\n          </Button>\n        </div>\n      </CardHeader>\n      <CardContent>\n        <div className=\"space-y-4\">\n          {/* Map Placeholder */}\n          <div className={`relative bg-muted rounded-lg overflow-hidden ${\n            isFullscreen ? 'h-[calc(100vh-200px)]' : 'h-96'\n          }`}>\n            {/* This would be replaced with an actual map component like Leaflet or Google Maps */}\n            <div className=\"absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50\">\n              <div className=\"text-center\">\n                <Map className=\"h-16 w-16 mx-auto mb-4 text-blue-500\" />\n                <h3 className=\"text-lg font-semibold mb-2\">Interactive Map</h3>\n                <p className=\"text-sm text-muted-foreground max-w-md\">\n                  This would display an interactive map showing the tracking path.\n                  Integration with mapping services like Google Maps or Leaflet would be implemented here.\n                </p>\n              </div>\n            </div>\n            \n            {/* Simulated map markers */}\n            <div className=\"absolute inset-0\">\n              {recordsWithCoordinates.map((record, index) => {\n                // Simulate marker positions (in real implementation, these would be calculated from actual coordinates)\n                const x = 20 + (index * 60) % 80\n                const y = 20 + (index * 40) % 60\n                \n                return (\n                  <div\n                    key={record.id}\n                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer ${\n                      record.isLatest ? 'z-20' : 'z-10'\n                    }`}\n                    style={{ left: `${x}%`, top: `${y}%` }}\n                    onClick={() => setSelectedRecord(record)}\n                  >\n                    <div className={`w-6 h-6 rounded-full border-2 border-white shadow-lg ${\n                      record.isLatest \n                        ? 'bg-red-500' \n                        : index === recordsWithCoordinates.length - 1\n                        ? 'bg-green-500'\n                        : 'bg-blue-500'\n                    }`} />\n                    \n                    {/* Tooltip */}\n                    {selectedRecord?.id === record.id && (\n                      <div className=\"absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-lg border min-w-48 z-30\">\n                        <div className=\"font-medium\">{record.location}</div>\n                        <div className=\"text-sm text-muted-foreground\">\n                          {formatDateTime(record.created_at)}\n                        </div>\n                        <Badge className={trackingUtils.getStatusColor(record.status)} size=\"sm\">\n                          {trackingUtils.getStatusDisplayName(record.status)}\n                        </Badge>\n                        {record.notes && (\n                          <div className=\"text-xs mt-1\">{record.notes}</div>\n                        )}\n                      </div>\n                    )}\n                  </div>\n                )\n              })}\n            </div>\n          </div>\n\n          {/* Map Controls and Info */}\n          <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n            <Card>\n              <CardContent className=\"p-4\">\n                <div className=\"flex items-center gap-2 mb-2\">\n                  <Route className=\"h-4 w-4 text-blue-500\" />\n                  <span className=\"font-medium\">Total Distance</span>\n                </div>\n                <div className=\"text-2xl font-bold\">{totalDistance.toFixed(1)} km</div>\n              </CardContent>\n            </Card>\n\n            <Card>\n              <CardContent className=\"p-4\">\n                <div className=\"flex items-center gap-2 mb-2\">\n                  <MapPin className=\"h-4 w-4 text-green-500\" />\n                  <span className=\"font-medium\">Locations</span>\n                </div>\n                <div className=\"text-2xl font-bold\">{recordsWithCoordinates.length}</div>\n              </CardContent>\n            </Card>\n\n            <Card>\n              <CardContent className=\"p-4\">\n                <div className=\"flex items-center gap-2 mb-2\">\n                  <Clock className=\"h-4 w-4 text-orange-500\" />\n                  <span className=\"font-medium\">Duration</span>\n                </div>\n                <div className=\"text-2xl font-bold\">\n                  {recordsWithCoordinates.length > 1 ? (\n                    Math.ceil(\n                      (new Date(recordsWithCoordinates[0].created_at).getTime() - \n                       new Date(recordsWithCoordinates[recordsWithCoordinates.length - 1].created_at).getTime()) \n                      / (1000 * 60 * 60 * 24)\n                    )\n                  ) : 0} days\n                </div>\n              </CardContent>\n            </Card>\n          </div>\n\n          {/* Location List */}\n          <div className=\"space-y-2\">\n            <h4 className=\"font-medium\">Tracked Locations</h4>\n            <div className=\"space-y-2 max-h-48 overflow-y-auto\">\n              {recordsWithCoordinates.map((record, index) => (\n                <div\n                  key={record.id}\n                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 ${\n                    selectedRecord?.id === record.id ? 'bg-muted' : ''\n                  }`}\n                  onClick={() => setSelectedRecord(selectedRecord?.id === record.id ? null : record)}\n                >\n                  <div className={`w-3 h-3 rounded-full ${\n                    record.isLatest \n                      ? 'bg-red-500' \n                      : index === recordsWithCoordinates.length - 1\n                      ? 'bg-green-500'\n                      : 'bg-blue-500'\n                  }`} />\n                  \n                  <div className=\"flex-1 min-w-0\">\n                    <div className=\"flex items-center gap-2\">\n                      <span className=\"font-medium\">{record.location}</span>\n                      {record.isLatest && (\n                        <Badge variant=\"secondary\" size=\"sm\">Current</Badge>\n                      )}\n                    </div>\n                    <div className=\"text-sm text-muted-foreground\">\n                      {trackingUtils.formatCoordinates(record.latitude, record.longitude)} • \n                      {formatDateTime(record.created_at)}\n                    </div>\n                  </div>\n                  \n                  <Badge className={trackingUtils.getStatusColor(record.status)} size=\"sm\">\n                    {trackingUtils.getStatusDisplayName(record.status)}\n                  </Badge>\n                </div>\n              ))}\n            </div>\n          </div>\n\n          {/* Map Legend */}\n          <div className=\"flex items-center gap-4 text-sm\">\n            <div className=\"flex items-center gap-2\">\n              <div className=\"w-3 h-3 rounded-full bg-green-500\" />\n              <span>Start Location</span>\n            </div>\n            <div className=\"flex items-center gap-2\">\n              <div className=\"w-3 h-3 rounded-full bg-blue-500\" />\n              <span>Intermediate</span>\n            </div>\n            <div className=\"flex items-center gap-2\">\n              <div className=\"w-3 h-3 rounded-full bg-red-500\" />\n              <span>Current Location</span>\n            </div>\n          </div>\n        </div>\n      </CardContent>\n    </Card>\n  )\n}"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { 
+  Map, 
+  MapPin, 
+  Navigation, 
+  Maximize2, 
+  Minimize2,
+  Loader2,
+  AlertTriangle,
+  Route,
+  Clock
+} from 'lucide-react'
+import { SKRWithRelations, TrackingRecord } from '@/types'
+import { trackingUtils } from '@/lib/tracking-utils'
+import { formatDateTime } from '@/lib/utils'
+
+interface TrackingMapProps {
+  skr: SKRWithRelations
+  trackingRecords: TrackingRecord[]
+  className?: string
+}
+
+export function TrackingMap({ skr, trackingRecords, className }: TrackingMapProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState<TrackingRecord | null>(null)
+  const [mapCenter, setMapCenter] = useState({ lat: 51.5074, lng: -0.1278 }) // Default to London
+  const [mapZoom, setMapZoom] = useState(2)
+
+  // Filter records that have coordinates
+  const recordsWithCoordinates = trackingRecords.filter(
+    record => record.latitude && record.longitude
+  )
+
+  useEffect(() => {
+    // Set map center to the latest location with coordinates
+    if (recordsWithCoordinates.length > 0) {
+      const latest = recordsWithCoordinates[0]
+      if (latest.latitude && latest.longitude) {
+        setMapCenter({ lat: latest.latitude, lng: latest.longitude })
+        setMapZoom(recordsWithCoordinates.length === 1 ? 10 : 6)
+      }
+    }
+  }, [recordsWithCoordinates])
+
+  const calculateBounds = () => {
+    if (recordsWithCoordinates.length === 0) return null
+    
+    const lats = recordsWithCoordinates.map(r => r.latitude!)
+    const lngs = recordsWithCoordinates.map(r => r.longitude!)
+    
+    return {
+      north: Math.max(...lats),
+      south: Math.min(...lats),
+      east: Math.max(...lngs),
+      west: Math.min(...lngs)
+    }
+  }
+
+  const totalDistance = recordsWithCoordinates.reduce((total, record) => 
+    total + (record.distanceTraveled || 0), 0
+  )
+
+  if (recordsWithCoordinates.length === 0) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Map className="h-5 w-5" />
+            Tracking Map
+          </CardTitle>
+          <CardDescription>
+            Visual representation of asset movement
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-12">
+            <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">No GPS Coordinates</h3>
+            <p className="text-muted-foreground">
+              No tracking records with GPS coordinates are available for this SKR.
+              Add location updates with coordinates to see the tracking map.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className={`${className} ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Map className="h-5 w-5" />
+              Tracking Map
+            </CardTitle>
+            <CardDescription>
+              {recordsWithCoordinates.length} location{recordsWithCoordinates.length !== 1 ? 's' : ''} with GPS coordinates
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Map Placeholder */}
+          <div className={`relative bg-muted rounded-lg overflow-hidden ${
+            isFullscreen ? 'h-[calc(100vh-200px)]' : 'h-96'
+          }`}>
+            {/* This would be replaced with an actual map component like Leaflet or Google Maps */}
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50">
+              <div className="text-center">
+                <Map className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+                <h3 className="text-lg font-semibold mb-2">Interactive Map</h3>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  This would display an interactive map showing the tracking path.
+                  Integration with mapping services like Google Maps or Leaflet would be implemented here.
+                </p>
+              </div>
+            </div>
+            
+            {/* Simulated map markers */}
+            <div className="absolute inset-0">
+              {recordsWithCoordinates.map((record, index) => {
+                // Simulate marker positions (in real implementation, these would be calculated from actual coordinates)
+                const x = 20 + (index * 60) % 80
+                const y = 20 + (index * 40) % 60
+                
+                return (
+                  <div
+                    key={record.id}
+                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
+                      record.isLatest ? 'z-20' : 'z-10'
+                    }`}
+                    style={{ left: `${x}%`, top: `${y}%` }}
+                    onClick={() => setSelectedRecord(record)}
+                  >
+                    <div className={`w-6 h-6 rounded-full border-2 border-white shadow-lg ${
+                      record.isLatest 
+                        ? 'bg-red-500' 
+                        : index === recordsWithCoordinates.length - 1
+                        ? 'bg-green-500'
+                        : 'bg-blue-500'
+                    }`} />
+                    
+                    {/* Tooltip */}
+                    {selectedRecord?.id === record.id && (
+                      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-lg border min-w-48 z-30">
+                        <div className="font-medium">{record.location}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatDateTime(record.created_at)}
+                        </div>
+                        <Badge className={trackingUtils.getStatusColor(record.status)} size="sm">
+                          {trackingUtils.getStatusDisplayName(record.status)}
+                        </Badge>
+                        {record.notes && (
+                          <div className="text-xs mt-1">{record.notes}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Map Controls and Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Route className="h-4 w-4 text-blue-500" />
+                  <span className="font-medium">Total Distance</span>
+                </div>
+                <div className="text-2xl font-bold">{totalDistance.toFixed(1)} km</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="h-4 w-4 text-green-500" />
+                  <span className="font-medium">Locations</span>
+                </div>
+                <div className="text-2xl font-bold">{recordsWithCoordinates.length}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-orange-500" />
+                  <span className="font-medium">Duration</span>
+                </div>
+                <div className="text-2xl font-bold">
+                  {recordsWithCoordinates.length > 1 ? (
+                    Math.ceil(
+                      (new Date(recordsWithCoordinates[0].created_at).getTime() - 
+                       new Date(recordsWithCoordinates[recordsWithCoordinates.length - 1].created_at).getTime()) 
+                      / (1000 * 60 * 60 * 24)
+                    )
+                  ) : 0} days
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Location List */}
+          <div className="space-y-2">
+            <h4 className="font-medium">Tracked Locations</h4>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {recordsWithCoordinates.map((record, index) => (
+                <div
+                  key={record.id}
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 ${
+                    selectedRecord?.id === record.id ? 'bg-muted' : ''
+                  }`}
+                  onClick={() => setSelectedRecord(selectedRecord?.id === record.id ? null : record)}
+                >
+                  <div className={`w-3 h-3 rounded-full ${
+                    record.isLatest 
+                      ? 'bg-red-500' 
+                      : index === recordsWithCoordinates.length - 1
+                      ? 'bg-green-500'
+                      : 'bg-blue-500'
+                  }`} />
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{record.location}</span>
+                      {record.isLatest && (
+                        <Badge variant="secondary" size="sm">Current</Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {trackingUtils.formatCoordinates(record.latitude, record.longitude)} • 
+                      {formatDateTime(record.created_at)}
+                    </div>
+                  </div>
+                  
+                  <Badge className={trackingUtils.getStatusColor(record.status)} size="sm">
+                    {trackingUtils.getStatusDisplayName(record.status)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Map Legend */}
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              <span>Start Location</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <span>Intermediate</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-red-500" />
+              <span>Current Location</span>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
