@@ -1,1 +1,164 @@
-// PDF generation utilities\n// Note: In a real implementation, you would use a PDF library like jsPDF, PDFKit, or Puppeteer\n// For this example, we'll create a simple HTML-to-PDF conversion simulation\n\nexport interface PDFOptions {\n  includeQR?: boolean\n  includeSignature?: boolean\n  watermark?: string\n}\n\nexport interface PDFResult {\n  buffer: Uint8Array\n  filename: string\n}\n\n// Simulated PDF generation - in real implementation would use actual PDF library\nexport async function generatePDFFromHTML(html: string, filename: string): Promise<PDFResult> {\n  // This is a placeholder implementation\n  // In a real application, you would use:\n  // - Puppeteer for HTML to PDF conversion\n  // - jsPDF for programmatic PDF creation\n  // - PDFKit for advanced PDF features\n  \n  const pdfContent = `%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n/Resources <<\n/Font <<\n/F1 5 0 R\n>>\n>>\n>>\nendobj\n\n4 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n100 700 Td\n(${filename}) Tj\nET\nendstream\nendobj\n\n5 0 obj\n<<\n/Type /Font\n/Subtype /Type1\n/BaseFont /Helvetica\n>>\nendobj\n\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000274 00000 n \n0000000369 00000 n \ntrailer\n<<\n/Size 6\n/Root 1 0 R\n>>\nstartxref\n444\n%%EOF`\n\n  const buffer = new TextEncoder().encode(pdfContent)\n  \n  return {\n    buffer,\n    filename\n  }\n}\n\nexport function formatCurrency(amount: number, currency: string = 'USD'): string {\n  return new Intl.NumberFormat('en-US', {\n    style: 'currency',\n    currency: currency\n  }).format(amount)\n}\n\nexport function formatDate(dateString: string): string {\n  return new Date(dateString).toLocaleDateString('en-US', {\n    year: 'numeric',\n    month: 'long',\n    day: 'numeric'\n  })\n}\n\nexport function formatDateTime(dateString: string): string {\n  return new Date(dateString).toLocaleString('en-US', {\n    year: 'numeric',\n    month: 'long',\n    day: 'numeric',\n    hour: '2-digit',\n    minute: '2-digit'\n  })\n}\n\n// Generate QR code data URL (placeholder)\nexport function generateQRCode(data: string): string {\n  // In a real implementation, you would use a QR code library\n  // This is a placeholder that returns a data URL for a simple QR code\n  return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==`\n}\n\n// Generate company logo data URL (placeholder)\nexport function getCompanyLogo(): string {\n  // In a real implementation, you would load the actual company logo\n  return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==`\n}\n\n// Company information\nexport const COMPANY_INFO = {\n  name: 'G1 Holding',\n  address: {\n    street: '123 Financial District',\n    city: 'London',\n    country: 'United Kingdom',\n    postal: 'EC1A 1BB'\n  },\n  contact: {\n    phone: '+44 20 1234 5678',\n    email: 'info@g1holding.com',\n    website: 'www.g1holding.com'\n  },\n  registration: {\n    number: 'GB123456789',\n    vat: 'GB987654321'\n  }\n}"
+// PDF generation utilities
+// Note: In a real implementation, you would use a PDF library like jsPDF, PDFKit, or Puppeteer
+// For this example, we'll create a simple HTML-to-PDF conversion simulation
+
+export interface PDFOptions {
+  includeQR?: boolean
+  includeSignature?: boolean
+  watermark?: string
+}
+
+export interface PDFResult {
+  buffer: Uint8Array
+  filename: string
+}
+
+// Simulated PDF generation - in real implementation would use actual PDF library
+export async function generatePDFFromHTML(html: string, filename: string): Promise<PDFResult> {
+  // This is a placeholder implementation
+  // In a real application, you would use:
+  // - Puppeteer for HTML to PDF conversion
+  // - jsPDF for programmatic PDF creation
+  // - PDFKit for advanced PDF features
+  
+  const pdfContent = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(${filename}) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000274 00000 n 
+0000000369 00000 n 
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+444
+%%EOF`
+
+  const buffer = new TextEncoder().encode(pdfContent)
+  
+  return {
+    buffer,
+    filename
+  }
+}
+
+export function formatCurrency(amount: number, currency: string = 'USD'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency
+  }).format(amount)
+}
+
+export function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+}
+
+export function formatDateTime(dateString: string): string {
+  return new Date(dateString).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// Generate QR code data URL (placeholder)
+export function generateQRCode(data: string): string {
+  // In a real implementation, you would use a QR code library
+  // This is a placeholder that returns a data URL for a simple QR code
+  return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==`
+}
+
+// Generate company logo URL (prefer public/logo.png)
+export function getCompanyLogo(): string {
+  const siteUrl = (typeof Deno !== 'undefined' && (Deno as any).env?.get)
+    ? (Deno as any).env.get('SITE_URL')
+    : ''
+  const publicLogo = siteUrl ? `${siteUrl}/logo.png` : ''
+  return publicLogo || `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==`
+}
+
+// Company information
+export const COMPANY_INFO = {
+  name: 'G1 Holding',
+  address: {
+    street: '123 Financial District',
+    city: 'London',
+    country: 'United Kingdom',
+    postal: 'EC1A 1BB'
+  },
+  contact: {
+    phone: '+44 20 1234 5678',
+    email: 'info@g1holding.com',
+    website: 'www.g1holding.com'
+  },
+  registration: {
+    number: 'GB123456789',
+    vat: 'GB987654321'
+  },
+  bankDetails: {
+    bank_name: 'G1 International Bank',
+    iban: 'GB29 NWBK 6016 1331 9268 19',
+    swift: 'NWBKGB2L'
+  }
+}
