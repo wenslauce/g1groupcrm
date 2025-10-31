@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { usePermissions } from '@/contexts/auth-context'
+import { usePermissions, useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -46,8 +46,22 @@ export function InvoiceList() {
   })
   
   const permissions = usePermissions()
+  const { user } = useAuth()
+  
+  // Memoize permission check based only on user role (not permissions object which changes)
+  const canManageFinance = useMemo(() => {
+    if (!user?.profile?.role) return false
+    return ['admin', 'finance'].includes(user.profile.role)
+  }, [user?.profile?.role])
+
+  // Use ref to track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false)
 
   const fetchInvoices = async () => {
+    // Prevent duplicate simultaneous calls
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    
     setLoading(true)
     setError('')
 
@@ -64,29 +78,41 @@ export function InvoiceList() {
 
       const response = await fetch(`/api/invoices?${params}`)
       const result = await response.json()
-
+      
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch invoices')
+        console.error('Invoice API error:', { status: response.status, result })
+        throw new Error(result.error || `HTTP ${response.status}: Failed to fetch invoices`)
       }
 
-      setInvoices(result.data)
+      // Handle data - Supabase returns array directly in result.data
+      const invoiceData = Array.isArray(result.data) ? result.data : []
+      
+      setInvoices(invoiceData)
       setPagination(prev => ({
         ...prev,
-        total: result.count,
-        totalPages: result.total_pages
+        total: result.count || 0,
+        totalPages: result.total_pages || 1
       }))
     } catch (error) {
+      console.error('Error fetching invoices:', error)
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }
 
   useEffect(() => {
-    if (permissions.canManageFinance()) {
-      fetchInvoices()
+    // Only fetch if user has finance permissions
+    if (!canManageFinance) {
+      setLoading(false)
+      setError('You do not have permission to view invoices.')
+      return
     }
-  }, [pagination.page, filters, permissions])
+    
+    fetchInvoices()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page, pagination.limit, filters.search, filters.status, filters.client_id, filters.date_from, filters.date_to])
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     if (!confirm('Are you sure you want to delete this invoice? This action cannot be undone.')) {
@@ -313,14 +339,30 @@ export function InvoiceList() {
                         <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{invoice.clients?.name}</div>
-                            <div className="text-sm text-muted-foreground">{invoice.clients?.email}</div>
+                            <div className="font-medium">
+                              {(() => {
+                                const invoiceAny = invoice as any
+                                const client = Array.isArray(invoiceAny.clients) 
+                                  ? invoiceAny.clients[0] 
+                                  : invoiceAny.clients || invoiceAny.client || invoice.client
+                                return client?.name || 'Unknown Client'
+                              })()}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {(() => {
+                                const invoiceAny = invoice as any
+                                const client = Array.isArray(invoiceAny.clients) 
+                                  ? invoiceAny.clients[0] 
+                                  : invoiceAny.clients || invoiceAny.client || invoice.client
+                                return client?.email || ''
+                              })()}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>{formatCurrency(invoice.amount, invoice.currency)}</TableCell>
                         <TableCell>
-                          <Badge className={financialUtils.getInvoiceStatusColor(invoice.status)}>
-                            {financialUtils.getInvoiceStatusDisplayName(invoice.status)}
+                          <Badge className={financialUtils.getInvoiceStatusColor(invoice.status as any)}>
+                            {financialUtils.getInvoiceStatusDisplayName(invoice.status as any)}
                           </Badge>
                         </TableCell>
                         <TableCell>
