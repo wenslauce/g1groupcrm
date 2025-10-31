@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { usePermissions } from '@/contexts/auth-context'
+import { usePermissions, useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,9 +37,28 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
   const [error, setError] = useState('')
   
   const permissions = usePermissions()
+  const { user } = useAuth()
+  
+  // Memoize permission checks based only on user role (not permissions object which changes)
+  const canViewClients = useMemo(() => {
+    if (!user?.profile?.role) return false
+    return ['admin', 'finance', 'operations', 'compliance'].includes(user.profile.role)
+  }, [user?.profile?.role])
+  
+  const canManageClients = useMemo(() => {
+    if (!user?.profile?.role) return false
+    return ['admin', 'finance'].includes(user.profile.role)
+  }, [user?.profile?.role])
+
+  // Use ref to track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false)
 
   useEffect(() => {
+    // Prevent duplicate simultaneous calls
+    if (fetchingRef.current) return
+    
     const fetchClient = async () => {
+      fetchingRef.current = true
       setLoading(true)
       setError('')
 
@@ -56,15 +75,19 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
         setError(error instanceof Error ? error.message : 'An error occurred')
       } finally {
         setLoading(false)
+        fetchingRef.current = false
       }
     }
 
-    if (permissions.canViewClients()) {
+    if (canViewClients) {
       fetchClient()
+    } else {
+      setLoading(false)
+      setError('You do not have permission to view client details.')
     }
-  }, [clientId, permissions])
+  }, [clientId, canViewClients])
 
-  if (!permissions.canViewClients()) {
+  if (!canViewClients) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
@@ -117,7 +140,7 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
             Client Profile • Created {formatDateTime(client.created_at)}
           </p>
         </div>
-        {permissions.canManageClients() && (
+        {canManageClients && (
           <Link href={`/dashboard/clients/${client.id}/edit`}>
             <Button className="bg-g1-primary hover:bg-g1-primary/90">
               <Edit className="mr-2 h-4 w-4" />

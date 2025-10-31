@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { usePermissions } from '@/contexts/auth-context'
+import { usePermissions, useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -48,8 +48,27 @@ export function ClientList({ onEditClient }: ClientListProps) {
   })
   
   const permissions = usePermissions()
+  const { user } = useAuth()
+  
+  // Memoize permission check based only on user role (not permissions object which changes)
+  const canViewClients = useMemo(() => {
+    if (!user?.profile?.role) return false
+    return ['admin', 'finance', 'operations', 'compliance'].includes(user.profile.role)
+  }, [user?.profile?.role])
+  
+  const canManageClients = useMemo(() => {
+    if (!user?.profile?.role) return false
+    return ['admin', 'finance'].includes(user.profile.role)
+  }, [user?.profile?.role])
+
+  // Use ref to track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false)
 
   const fetchClients = async () => {
+    // Prevent duplicate simultaneous calls
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    
     setLoading(true)
     setError('')
 
@@ -81,14 +100,21 @@ export function ClientList({ onEditClient }: ClientListProps) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }
 
   useEffect(() => {
-    if (permissions.canViewClients()) {
-      fetchClients()
+    // Only fetch if user has view permissions
+    if (!canViewClients) {
+      setLoading(false)
+      setError('You do not have permission to view clients.')
+      return
     }
-  }, [pagination.page, filters, permissions])
+    
+    fetchClients()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page, pagination.limit, filters.search, filters.type, filters.risk_level, filters.compliance_status, filters.country])
 
   const handleDeleteClient = async (clientId: string) => {
     if (!confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
@@ -134,7 +160,7 @@ export function ClientList({ onEditClient }: ClientListProps) {
     setPagination(prev => ({ ...prev, page: 1 }))
   }
 
-  if (!permissions.canViewClients()) {
+  if (!canViewClients) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
@@ -157,7 +183,7 @@ export function ClientList({ onEditClient }: ClientListProps) {
               Manage client profiles, compliance status, and relationships
             </CardDescription>
           </div>
-          {permissions.canManageClients() && (
+          {canManageClients && (
             <Link href="/dashboard/clients/create">
               <Button className="bg-g1-primary hover:bg-g1-primary/90">
                 <Plus className="mr-2 h-4 w-4" />
@@ -312,8 +338,8 @@ export function ClientList({ onEditClient }: ClientListProps) {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge className={clientUtils.getComplianceStatusColor(client.compliance_status)}>
-                            {clientUtils.getComplianceStatusDisplayName(client.compliance_status)}
+                          <Badge className={clientUtils.getComplianceStatusColor(client.compliance_status as any)}>
+                            {clientUtils.getComplianceStatusDisplayName(client.compliance_status as any)}
                           </Badge>
                         </TableCell>
                         <TableCell>{formatDateTime(client.created_at)}</TableCell>
@@ -324,7 +350,7 @@ export function ClientList({ onEditClient }: ClientListProps) {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
-                            {permissions.canManageClients() && (
+                            {canManageClients && (
                               <>
                                 {onEditClient ? (
                                   <Button

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { usePermissions } from '@/contexts/auth-context'
+import { usePermissions, useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -43,8 +43,22 @@ export function ReceiptList() {
   })
   
   const permissions = usePermissions()
+  const { user } = useAuth()
+  
+  // Memoize permission check based only on user role (not permissions object which changes)
+  const canManageFinance = useMemo(() => {
+    if (!user?.profile?.role) return false
+    return ['admin', 'finance'].includes(user.profile.role)
+  }, [user?.profile?.role])
+
+  // Use ref to track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false)
 
   const fetchReceipts = async () => {
+    // Prevent duplicate simultaneous calls
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    
     setLoading(true)
     setError('')
 
@@ -76,14 +90,21 @@ export function ReceiptList() {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }
 
   useEffect(() => {
-    if (permissions.canManageFinance()) {
-      fetchReceipts()
+    // Only fetch if user has finance permissions
+    if (!canManageFinance) {
+      setLoading(false)
+      setError('You do not have permission to view receipts.')
+      return
     }
-  }, [pagination.page, filters, permissions])
+    
+    fetchReceipts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.page, pagination.limit, filters.search, filters.invoice_id, filters.payment_method, filters.date_from, filters.date_to])
 
   const handleGeneratePDF = async (receiptId: string) => {
     try {
@@ -137,7 +158,7 @@ export function ReceiptList() {
     setPagination(prev => ({ ...prev, page: 1 }))
   }
 
-  if (!permissions.canManageFinance()) {
+  if (!canManageFinance) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
@@ -160,7 +181,7 @@ export function ReceiptList() {
               View and manage payment receipts for invoices
             </CardDescription>
           </div>
-          {permissions.canManageFinance() && (
+          {canManageFinance && (
             <Link href="/dashboard/finance/receipts/create">
               <Button className="bg-g1-primary hover:bg-g1-primary/90">
                 <Plus className="mr-2 h-4 w-4" />
