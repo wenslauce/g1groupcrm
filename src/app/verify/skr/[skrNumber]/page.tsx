@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   CheckCircle, 
   XCircle, 
@@ -18,9 +19,16 @@ import {
   Loader2,
   AlertTriangle,
   Eye,
-  EyeOff
+  EyeOff,
+  MapPin,
+  Truck,
+  Clock,
+  Navigation,
+  History,
+  ArrowLeft
 } from 'lucide-react'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
+import Link from 'next/link'
 
 interface VerificationResult {
   valid: boolean
@@ -44,21 +52,57 @@ interface VerificationResult {
   error?: string
 }
 
+interface TrackingData {
+  id: string
+  tracking_number: string
+  status: string
+  current_location: string
+  current_country: string
+  estimated_delivery?: string
+  actual_delivery?: string
+  notes?: string
+  updated_at: string
+}
+
+interface TrackingEvent {
+  id: string
+  event_type: string
+  event_date: string
+  location: string
+  country: string
+  description: string
+  created_at: string
+}
+
+interface TrackingResult {
+  success: boolean
+  skr_number: string
+  skr_status: string
+  tracking: TrackingData[]
+  events: TrackingEvent[]
+  last_updated: string
+  error?: string
+}
+
 interface SKRVerificationPageProps {
   params: { skrNumber: string }
 }
 
 export default function SKRVerificationPage({ params }: SKRVerificationPageProps) {
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null)
+  const [trackingResult, setTrackingResult] = useState<TrackingResult | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingTracking, setLoadingTracking] = useState(true)
   const [hashInput, setHashInput] = useState('')
   const [showHashInput, setShowHashInput] = useState(false)
   const [verifyingHash, setVerifyingHash] = useState(false)
+  const [activeTab, setActiveTab] = useState('verification')
 
   const skrNumber = decodeURIComponent(params.skrNumber)
 
   useEffect(() => {
     verifySKR()
+    fetchTracking()
   }, [])
 
   const verifySKR = async (hash?: string) => {
@@ -85,6 +129,29 @@ export default function SKRVerificationPage({ params }: SKRVerificationPageProps
     }
   }
 
+  const fetchTracking = async () => {
+    setLoadingTracking(true)
+    try {
+      const response = await fetch(`/api/verify/tracking/${encodeURIComponent(skrNumber)}`)
+      const result = await response.json()
+      
+      setTrackingResult(result)
+    } catch (error) {
+      console.error('Failed to fetch tracking:', error)
+      setTrackingResult({
+        success: false,
+        skr_number: skrNumber,
+        skr_status: '',
+        tracking: [],
+        events: [],
+        last_updated: new Date().toISOString(),
+        error: 'Failed to load tracking information'
+      })
+    } finally {
+      setLoadingTracking(false)
+    }
+  }
+
   const handleHashVerification = async () => {
     if (!hashInput.trim()) return
     
@@ -107,24 +174,50 @@ export default function SKRVerificationPage({ params }: SKRVerificationPageProps
       issued: 'Issued',
       in_transit: 'In Transit',
       delivered: 'Delivered',
-      closed: 'Closed'
+      closed: 'Closed',
+      pending: 'Pending',
+      picked_up: 'Picked Up',
+      customs: 'In Customs',
+      out_for_delivery: 'Out for Delivery'
     }
-    return names[status] || status.replace('_', ' ').toUpperCase()
+    return names[status] || status.replace(/_/g, ' ').toUpperCase()
+  }
+
+  const getEventIcon = (eventType: string) => {
+    switch (eventType) {
+      case 'picked_up':
+        return <Package className="h-5 w-5" />
+      case 'in_transit':
+        return <Truck className="h-5 w-5" />
+      case 'customs':
+        return <Shield className="h-5 w-5" />
+      case 'delivered':
+        return <CheckCircle className="h-5 w-5" />
+      case 'location_update':
+        return <MapPin className="h-5 w-5" />
+      default:
+        return <Navigation className="h-5 w-5" />
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <Shield className="h-12 w-12 text-blue-600 mr-3" />
-            <h1 className="text-3xl font-bold text-gray-900">G1 Holding</h1>
+        <div className="mb-6">
+          <Link href="/verify" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Search
+          </Link>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Shield className="h-10 w-10 text-blue-600 mr-3" />
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">SKR Verification & Tracking</h1>
+                <p className="text-sm text-gray-600">Real-time status and verification details</p>
+              </div>
+            </div>
           </div>
-          <h2 className="text-xl text-gray-600">SKR Verification System</h2>
-          <p className="text-sm text-gray-500 mt-2">
-            Verify the authenticity of Secure Keeper Receipts
-          </p>
         </div>
 
         {/* SKR Number Display */}
@@ -132,7 +225,7 @@ export default function SKRVerificationPage({ params }: SKRVerificationPageProps
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-2">
               <FileText className="h-6 w-6" />
-              SKR Verification
+              SKR Number
             </CardTitle>
             <div className="text-2xl font-mono font-bold text-blue-600 mt-2">
               {skrNumber}
@@ -152,9 +245,26 @@ export default function SKRVerificationPage({ params }: SKRVerificationPageProps
           </Card>
         )}
 
-        {/* Verification Results */}
+        {/* Tabbed Results */}
         {!loading && verificationResult && (
-          <div className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="verification" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Verification
+              </TabsTrigger>
+              <TabsTrigger value="tracking" className="flex items-center gap-2">
+                <Truck className="h-4 w-4" />
+                Tracking
+              </TabsTrigger>
+              <TabsTrigger value="history" className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                History
+              </TabsTrigger>
+            </TabsList>
+
+            {/* VERIFICATION TAB */}
+            <TabsContent value="verification" className="space-y-6">
             {/* Verification Status */}
             <Card>
               <CardHeader>
@@ -383,7 +493,185 @@ export default function SKRVerificationPage({ params }: SKRVerificationPageProps
                 )}
               </>
             )}
-          </div>
+            </TabsContent>
+
+            {/* TRACKING TAB */}
+            <TabsContent value="tracking" className="space-y-6">
+              {loadingTracking ? (
+                <Card>
+                  <CardContent className="p-8">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" />
+                      <span className="text-lg">Loading tracking information...</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : trackingResult?.success && trackingResult.tracking.length > 0 ? (
+                <>
+                  {trackingResult.tracking.map((track) => (
+                    <div key={track.id}>
+                      {/* Current Status Card */}
+                      <Card className="mb-6">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <MapPin className="h-6 w-6 text-blue-600" />
+                            Current Status
+                          </CardTitle>
+                          <CardDescription>
+                            Last updated: {formatDateTime(track.updated_at)}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Tracking Number</Label>
+                                <div className="mt-1 font-mono font-semibold text-lg">{track.tracking_number}</div>
+                              </div>
+                              
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Status</Label>
+                                <div className="mt-1">
+                                  <Badge className={getStatusColor(track.status)}>
+                                    {getStatusDisplayName(track.status)}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Current Location</Label>
+                                <div className="mt-1 flex items-center">
+                                  <Navigation className="h-4 w-4 text-gray-400 mr-2" />
+                                  <span className="font-medium">{track.current_location}</span>
+                                </div>
+                                <div className="text-sm text-gray-600 mt-1">{track.current_country}</div>
+                              </div>
+
+                              {track.estimated_delivery && (
+                                <div>
+                                  <Label className="text-sm font-medium text-gray-500">
+                                    {track.actual_delivery ? 'Delivered On' : 'Estimated Delivery'}
+                                  </Label>
+                                  <div className="mt-1 flex items-center">
+                                    <Clock className="h-4 w-4 text-gray-400 mr-2" />
+                                    {formatDateTime(track.actual_delivery || track.estimated_delivery)}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {track.notes && (
+                            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-sm text-gray-700">{track.notes}</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Tracking Information Available</h3>
+                    <p className="text-gray-600">
+                      {trackingResult?.error || 'Tracking information has not been added for this SKR yet.'}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            {/* HISTORY TAB */}
+            <TabsContent value="history" className="space-y-6">
+              {loadingTracking ? (
+                <Card>
+                  <CardContent className="p-8">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" />
+                      <span className="text-lg">Loading history...</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : trackingResult?.success && trackingResult.events.length > 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <History className="h-6 w-6" />
+                      Tracking History
+                    </CardTitle>
+                    <CardDescription>
+                      Complete timeline of all tracking events
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative">
+                      {/* Timeline line */}
+                      <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200" />
+                      
+                      {/* Events */}
+                      <div className="space-y-6">
+                        {trackingResult.events.map((event, index) => (
+                          <div key={event.id} className="relative flex gap-4">
+                            {/* Icon */}
+                            <div className={`relative z-10 flex items-center justify-center h-12 w-12 rounded-full ${
+                              index === 0 ? 'bg-blue-100' : 'bg-gray-100'
+                            }`}>
+                              <div className={index === 0 ? 'text-blue-600' : 'text-gray-600'}>
+                                {getEventIcon(event.event_type)}
+                              </div>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 pb-6">
+                              <div className="bg-white border rounded-lg p-4 shadow-sm">
+                                <div className="flex items-start justify-between mb-2">
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900">
+                                      {getStatusDisplayName(event.event_type)}
+                                    </h4>
+                                    <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                                  </div>
+                                  {index === 0 && (
+                                    <Badge className="bg-blue-100 text-blue-800 ml-2">Latest</Badge>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+                                  <div className="flex items-center">
+                                    <MapPin className="h-3.5 w-3.5 mr-1" />
+                                    {event.location}, {event.country}
+                                  </div>
+                                  <div className="flex items-center">
+                                    <Calendar className="h-3.5 w-3.5 mr-1" />
+                                    {formatDateTime(event.event_date)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <History className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No History Available</h3>
+                    <p className="text-gray-600">
+                      No tracking events have been recorded for this SKR yet.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
 
         {/* Footer */}
