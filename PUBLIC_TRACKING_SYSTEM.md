@@ -363,8 +363,8 @@ Potential additions:
 ## 📞 Support
 
 For questions about public tracking:
-- Email: verify@g1holding.com
-- Support: support@g1holding.com
+- Email: verify@g1groupofcompanies.com
+- Support: support@g1groupofcompanies.com
 
 ---
 

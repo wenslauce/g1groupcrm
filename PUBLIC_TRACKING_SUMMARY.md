@@ -351,8 +351,8 @@ print(f"Valid: {data['valid']}")
 ## 📞 Support
 
 Need help? Contact:
-- **Verification Issues:** verify@g1holding.com
-- **General Support:** support@g1holding.com
+- **Verification Issues:** verify@g1groupofcompanies.com
+- **General Support:** support@g1groupofcompanies.com
 
 ---
 

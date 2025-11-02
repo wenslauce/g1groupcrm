@@ -61,7 +61,7 @@ http://localhost:3000/verify
 └─────────────────────────────────────────────────────────┘
 
             📞 Need help? Contact our support team
-         support@g1holding.com | verify@g1holding.com
+         support@g1groupofcompanies.com | verify@g1groupofcompanies.com
 ```
 
 ### Key Features
@@ -193,7 +193,7 @@ http://localhost:3000/verify/skr/SKR-2024-001
 └─────────────────────────────────────────────────────────┘
 
               © 2024 G1 Holding. All rights reserved.
-     For questions: verify@g1holding.com | support@g1holding.com
+     For questions: verify@g1groupofcompanies.com | support@g1groupofcompanies.com
 ```
 
 ---

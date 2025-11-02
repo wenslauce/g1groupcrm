@@ -430,8 +430,8 @@ curl -H "Origin: https://example.com" \
 ## 📞 Support & Contact
 
 ### For Users
-- **Verification Issues:** verify@g1holding.com
-- **General Support:** support@g1holding.com
+- **Verification Issues:** verify@g1groupofcompanies.com
+- **General Support:** support@g1groupofcompanies.com
 - **Phone:** [Add phone number]
 
 ### For Developers

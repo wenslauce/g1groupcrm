@@ -184,12 +184,12 @@ export default function VerifyLandingPage() {
             Need help? Contact our support team
           </p>
           <div className="flex items-center justify-center gap-4 text-sm">
-            <a href="mailto:support@g1holding.com" className="text-blue-600 hover:underline">
-              support@g1holding.com
+            <a href="mailto:support@g1groupofcompanies.com" className="text-blue-600 hover:underline">
+              support@g1groupofcompanies.com
             </a>
             <span className="text-gray-400">|</span>
-            <a href="mailto:verify@g1holding.com" className="text-blue-600 hover:underline">
-              verify@g1holding.com
+            <a href="mailto:verify@g1groupofcompanies.com" className="text-blue-600 hover:underline">
+              verify@g1groupofcompanies.com
             </a>
           </div>
           <p className="text-xs text-gray-500 mt-4">

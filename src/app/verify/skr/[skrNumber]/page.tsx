@@ -679,8 +679,8 @@ export default function SKRVerificationPage({ params }: SKRVerificationPageProps
           <p>© 2024 G1 Holding. All rights reserved.</p>
           <p className="mt-1">
             For questions about this verification, please contact: 
-            <a href="mailto:verify@g1holding.com" className="text-blue-600 hover:underline ml-1">
-              verify@g1holding.com
+            <a href="mailto:verify@g1groupofcompanies.com" className="text-blue-600 hover:underline ml-1">
+              verify@g1groupofcompanies.com
             </a>
           </p>
         </div>

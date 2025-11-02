@@ -168,8 +168,8 @@ curl http://localhost:3000/api/verify/tracking/SKR-2024-001
 
 ## 📞 Support Contacts
 
-- **Verification Issues:** verify@g1holding.com
-- **General Support:** support@g1holding.com
+- **Verification Issues:** verify@g1groupofcompanies.com
+- **General Support:** support@g1groupofcompanies.com
 
 ---
 

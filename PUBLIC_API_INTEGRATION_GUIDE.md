@@ -831,8 +831,8 @@ curl -H "Origin: https://example.com" \
 ## 📞 Support
 
 ### Technical Support
-- **API Issues:** support@g1holding.com
-- **Integration Help:** verify@g1holding.com
+- **API Issues:** support@g1groupofcompanies.com
+- **Integration Help:** verify@g1groupofcompanies.com
 
 ### Documentation
 - **Full Docs:** `PUBLIC_TRACKING_SYSTEM.md`
