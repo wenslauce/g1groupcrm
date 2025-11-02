@@ -95,7 +95,7 @@ export function MainDashboard({ className }: MainDashboardProps) {
     setError('')
 
     try {
-      // Fetch analytics overview
+      // Fetch analytics overview (includes recent activities)
       const analyticsResponse = await fetch(`/api/analytics/overview?timeframe=${timeframe}`)
       
       if (!analyticsResponse.ok) {
@@ -104,19 +104,7 @@ export function MainDashboard({ className }: MainDashboardProps) {
 
       const analyticsData = await analyticsResponse.json()
 
-      // Fetch recent activities from audit logs
-      const activitiesResponse = await fetch('/api/audit/logs?limit=10')
-      let recentActivities = []
-      
-      if (activitiesResponse.ok) {
-        const activitiesData = await activitiesResponse.json()
-        recentActivities = activitiesData.logs || []
-      }
-
-      setData({
-        ...analyticsData,
-        recent_activities: recentActivities
-      })
+      setData(analyticsData)
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load dashboard data')
     } finally {
@@ -186,7 +174,8 @@ export function MainDashboard({ className }: MainDashboardProps) {
     total_skrs: apiSummary?.total_skrs || 0,
     active_skrs: (apiSummary?.issued_skrs || 0) + (apiSummary?.in_transit_skrs || 0),
     issued_skrs: apiSummary?.issued_skrs || 0,
-    total_asset_value: 0, // Not available in current API
+    total_assets: apiSummary?.total_assets || 0,
+    total_asset_value: apiSummary?.total_asset_value || 0,
     total_invoice_amount: apiSummary?.total_revenue || apiSummary?.total_invoice_amount || 0,
     total_paid_amount: apiSummary?.collected_revenue || apiSummary?.total_paid_amount || 0,
     outstanding_amount: (apiSummary?.total_revenue || apiSummary?.total_invoice_amount || 0) - (apiSummary?.collected_revenue || apiSummary?.total_paid_amount || 0),
@@ -294,20 +283,16 @@ export function MainDashboard({ className }: MainDashboardProps) {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Asset Value</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Asset Value</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(summary.total_asset_value, 'USD')}
             </div>
-            <div className="flex items-center text-xs text-muted-foreground">
-              {getTrendIcon(mappedTrends.asset_value_growth)}
-              <span className={`ml-1 ${getTrendColor(mappedTrends.asset_value_growth)}`}>
-                {mappedTrends.asset_value_growth > 0 ? '+' : ''}{mappedTrends.asset_value_growth.toFixed(1)}%
-              </span>
-              <span className="ml-1">from last period</span>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              {summary.total_assets} asset{summary.total_assets !== 1 ? 's' : ''} tracked
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -368,26 +353,36 @@ export function MainDashboard({ className }: MainDashboardProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recent_activities.slice(0, 8).map((activity) => (
-                <div key={activity.id} className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    {getActivityIcon(activity.action)}
+            {recent_activities && recent_activities.length > 0 ? (
+              <div className="space-y-4">
+                {recent_activities.slice(0, 8).map((activity) => (
+                  <div key={activity.id} className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      {getActivityIcon(activity.action)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium capitalize">
+                        {activity.action.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {activity.resource_type} • by {activity.user_profiles?.full_name || 'System'}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0 text-sm text-gray-500">
+                      {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">
-                      {activity.action.replace('_', ' ')}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {activity.resource_type} {activity.resource_id} • by {activity.user_profiles?.full_name || 'System'}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 text-sm text-gray-500">
-                    {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-sm text-muted-foreground">No recent activities</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Activity will appear here as you use the system
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -440,7 +435,7 @@ export function MainDashboard({ className }: MainDashboardProps) {
       </div>
 
       {/* Status Distributions */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -501,6 +496,42 @@ export function MainDashboard({ className }: MainDashboardProps) {
                   </div>
                 )
               })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Asset Types
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {Object.entries(distributions.asset_types || {}).length > 0 ? (
+                Object.entries(distributions.asset_types || {}).map(([type, count]) => {
+                  const total = Object.values(distributions.asset_types || {}).reduce((sum, val) => sum + val, 0)
+                  const percentage = total > 0 ? (count / total) * 100 : 0
+                  
+                  return (
+                    <div key={type} className="flex items-center justify-between">
+                      <span className="text-sm capitalize">{type.replace('_', ' ')}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-purple-500 rounded-full" 
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <Badge variant="outline">{count}</Badge>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">No assets yet</p>
+              )}
             </div>
           </CardContent>
         </Card>

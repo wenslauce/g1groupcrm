@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { SKRWithRelations, TrackingRecord } from '@/types'
 import { TrackingTimeline } from './tracking-timeline'
-import { TrackingMap } from './tracking-map'
+import { TrackingMapLeaflet } from './tracking-map-leaflet'
 import { LocationUpdateForm } from './location-update-form'
 import { usePermissions } from '@/contexts/auth-context'
 
@@ -31,12 +31,14 @@ export function TrackingDashboard({ skr }: TrackingDashboardProps) {
   const [activeTab, setActiveTab] = useState('timeline')
   
   const permissions = usePermissions()
+  
+  // Use ref to track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false)
 
-  useEffect(() => {
-    fetchTrackingData()
-  }, [skr.id])
 
   const fetchTrackingData = async () => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
     setLoading(true)
     try {
       const response = await fetch(`/api/skrs/${skr.id}/tracking`)
@@ -46,13 +48,19 @@ export function TrackingDashboard({ skr }: TrackingDashboardProps) {
         throw new Error(result.error || 'Failed to fetch tracking data')
       }
       
-      setTrackingRecords(result.data)
+      setTrackingRecords(result.data || [])
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }
+
+  useEffect(() => {
+    fetchTrackingData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skr.id])
 
   const handleUpdate = () => {
     setShowAddForm(false)
@@ -221,7 +229,7 @@ export function TrackingDashboard({ skr }: TrackingDashboardProps) {
         </TabsContent>
         
         <TabsContent value="map" className="mt-6">
-          <TrackingMap skr={skr} trackingRecords={trackingRecords} />
+          <TrackingMapLeaflet skr={skr} trackingRecords={trackingRecords} />
         </TabsContent>
       </Tabs>
     </div>

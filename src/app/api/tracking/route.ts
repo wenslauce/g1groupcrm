@@ -37,8 +37,7 @@ export async function GET(request: NextRequest) {
           status,
           client:clients(id, name),
           asset:assets(id, asset_name, asset_type)
-        ),
-        recorded_by_user:user_profiles!recorded_by(id, full_name)
+        )
       `, { count: 'exact' })
       .order('created_at', { ascending: false })
     
@@ -109,12 +108,13 @@ export async function POST(request: NextRequest) {
       .from('tracking')
       .insert({
         skr_id: validatedData.skr_id,
-        location: validatedData.location,
-        latitude: validatedData.latitude,
-        longitude: validatedData.longitude,
+        current_location: validatedData.location,
+        status: 'in_transit', // Set appropriate status
+        coordinates: validatedData.latitude && validatedData.longitude 
+          ? `(${validatedData.longitude},${validatedData.latitude})` 
+          : null,
         notes: validatedData.notes,
-        recorded_by: user.id,
-        metadata: validatedData.metadata || {}
+        updated_by: user.id
       })
       .select(`
         *,
@@ -124,8 +124,7 @@ export async function POST(request: NextRequest) {
           status,
           client:clients(id, name),
           asset:assets(id, asset_name)
-        ),
-        recorded_by_user:user_profiles!recorded_by(id, full_name)
+        )
       `)
       .single()
     

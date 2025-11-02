@@ -141,37 +141,34 @@ export type Database = {
           id: string
           created_at: string
           skr_id: string
-          location: string
-          latitude: number | null
-          longitude: number | null
+          current_location: string | null
           status: string
+          coordinates: string | null
+          last_update: string
+          updated_by: string | null
           notes: string | null
-          recorded_by: string | null
-          metadata: Json | null
         }
         Insert: {
           id?: string
           created_at?: string
           skr_id: string
-          location: string
-          latitude?: number | null
-          longitude?: number | null
+          current_location?: string | null
           status: string
+          coordinates?: string | null
+          last_update?: string
+          updated_by?: string | null
           notes?: string | null
-          recorded_by?: string | null
-          metadata?: Json | null
         }
         Update: {
           id?: string
           created_at?: string
           skr_id?: string
-          location?: string
-          latitude?: number | null
-          longitude?: number | null
+          current_location?: string | null
           status?: string
+          coordinates?: string | null
+          last_update?: string
+          updated_by?: string | null
           notes?: string | null
-          recorded_by?: string | null
-          metadata?: Json | null
         }
       }
       invoices: {
@@ -412,13 +409,22 @@ export type AuditLogUpdate = Database['public']['Tables']['audit_logs']['Update'
 
 // Extended Types with Relations
 export interface TrackingRecord extends Tracking {
-  recorded_by_user?: {
+  updated_by_profile?: {
     id: string
-    name: string
+    full_name: string
   }
   isLatest?: boolean
   previousLocation?: string
   distanceTraveled?: number
+  // Transform coordinates POINT to lat/lng
+  latitude?: number
+  longitude?: number
+  // Alias for component compatibility
+  location?: string
+  recorded_by_user?: {
+    id: string
+    name: string
+  }
 }
 
 export interface SKRWithRelations extends SKR {

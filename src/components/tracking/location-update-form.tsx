@@ -15,11 +15,14 @@ import {
   Loader2, 
   Navigation, 
   Clock, 
-  AlertTriangle
+  AlertTriangle,
+  Ship,
+  Plane
 } from 'lucide-react'
 import { SKRWithRelations } from '@/types'
 import { trackingUtils } from '@/lib/tracking-utils'
 import { LocationUpdateData } from '@/lib/validations/tracking'
+import { SmartLocationInput } from './smart-location-input'
 
 interface LocationUpdateFormProps {
   skr: SKRWithRelations
@@ -42,6 +45,15 @@ export function LocationUpdateForm({ skr, onUpdate, onCancel }: LocationUpdateFo
 
   const handleLocationSuggestion = (location: string) => {
     setFormData(prev => ({ ...prev, location }))
+  }
+
+  const handleSmartLocationSelect = (location: string, coordinates?: { lat: number; lng: number }) => {
+    setFormData(prev => ({
+      ...prev,
+      location,
+      latitude: coordinates?.lat,
+      longitude: coordinates?.lng
+    }))
   }
 
   const getCurrentLocation = () => {
@@ -162,25 +174,53 @@ export function LocationUpdateForm({ skr, onUpdate, onCancel }: LocationUpdateFo
             </div>
           </div>
 
-          {/* Location Input */}
+          {/* Smart Location Input */}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="location">Location *</Label>
-              <Input
-                id="location"
+              <Label>Location *</Label>
+              <SmartLocationInput
                 value={formData.location}
-                onChange={(e) => updateFormData('location', e.target.value)}
-                placeholder="Enter current location"
-                required
+                onLocationSelect={handleSmartLocationSelect}
                 disabled={isLoading}
               />
+              <p className="text-sm text-muted-foreground">
+                Search for ports, airports, or cities. Coordinates will be populated automatically.
+              </p>
             </div>
 
-            {/* Location Suggestions */}
+            {/* Popular Location Tabs */}
             <div className="space-y-2">
-              <Label>Quick Locations</Label>
+              <Label>Quick Access</Label>
+              <div className="flex gap-2 mb-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Show port suggestions
+                  }}
+                  disabled={isLoading}
+                  className="gap-1"
+                >
+                  <Ship className="h-3 w-3" />
+                  Major Ports
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Show airport suggestions
+                  }}
+                  disabled={isLoading}
+                  className="gap-1"
+                >
+                  <Plane className="h-3 w-3" />
+                  Airports
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {trackingUtils.getLocationSuggestions().slice(0, 8).map((location) => (
+                {['In Transit - Sea', 'In Transit - Air', 'Customs Clearance', 'Distribution Center'].map((location) => (
                   <Button
                     key={location}
                     type="button"

@@ -19,8 +19,7 @@ export async function GET(
     let query = supabase
       .from('tracking')
       .select(`
-        *,
-        updated_by_profile:user_profiles!tracking_updated_by_fkey(full_name)
+        *
       `)
       .eq('skr_id', params.id)
       .order('created_at', { ascending: false })
@@ -40,7 +39,49 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
     
-    return NextResponse.json({ data })
+    // Fetch user profiles for all unique updated_by IDs
+    const userIds = [...new Set(data?.map(r => r.updated_by).filter(Boolean))]
+    const userProfiles: Record<string, any> = {}
+    
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('id, full_name')
+        .in('id', userIds)
+      
+      profiles?.forEach(profile => {
+        userProfiles[profile.id] = profile
+      })
+    }
+    
+    // Transform tracking data to match TrackingRecord type
+    const transformedData = data?.map(record => {
+      // Parse coordinates from POINT to lat/lng
+      let latitude, longitude
+      if (record.coordinates) {
+        const coords = record.coordinates.match(/\((-?\d+\.?\d*),(-?\d+\.?\d*)\)/)
+        if (coords) {
+          longitude = parseFloat(coords[1])
+          latitude = parseFloat(coords[2])
+        }
+      }
+      
+      const userProfile = record.updated_by ? userProfiles[record.updated_by] : null
+      
+      return {
+        ...record,
+        latitude,
+        longitude,
+        location: record.current_location, // Alias for component compatibility
+        recorded_by_user: userProfile ? {
+          id: userProfile.id,
+          name: userProfile.full_name
+        } : undefined,
+        isLatest: record.is_latest || false
+      }
+    }) || []
+    
+    return NextResponse.json({ data: transformedData })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },
@@ -71,27 +112,72 @@ export async function POST(
       return NextResponse.json({ error: 'SKR not found' }, { status: 404 })
     }
     
-    const { data, error } = await supabase
+    const insertResult = await supabase
       .from('tracking')
       .insert({
         skr_id: params.id,
         current_location: body.current_location,
         status: body.status,
-        coordinates: body.coordinates ? `(${body.coordinates.lat},${body.coordinates.lng})` : null,
+        coordinates: body.coordinates ? `(${body.coordinates.lng},${body.coordinates.lat})` : null,
         notes: body.notes,
         updated_by: user.id
       })
-      .select(`
-        *,
-        updated_by_profile:user_profiles!tracking_updated_by_fkey(full_name)
-      `)
+      .select('*')
+      .single()
+    
+    if (insertResult.error) {
+      return NextResponse.json({ error: insertResult.error.message }, { status: 400 })
+    }
+    
+    // Mark all other records as not latest
+    await supabase
+      .from('tracking')
+      .update({ is_latest: false })
+      .eq('skr_id', params.id)
+      .neq('id', insertResult.data.id)
+    
+    // Mark this record as latest
+    const { data, error } = await supabase
+      .from('tracking')
+      .update({ is_latest: true })
+      .eq('id', insertResult.data.id)
+      .select('*')
       .single()
     
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
     
-    return NextResponse.json({ data }, { status: 201 })
+    // Fetch user profile
+    const { data: userProfile } = await supabase
+      .from('user_profiles')
+      .select('id, full_name')
+      .eq('id', user.id)
+      .single()
+    
+    // Transform the data
+    let latitude, longitude
+    if (data.coordinates) {
+      const coords = data.coordinates.match(/\((-?\d+\.?\d*),(-?\d+\.?\d*)\)/)
+      if (coords) {
+        longitude = parseFloat(coords[1])
+        latitude = parseFloat(coords[2])
+      }
+    }
+    
+    const transformedData = {
+      ...data,
+      latitude,
+      longitude,
+      location: data.current_location,
+      recorded_by_user: userProfile ? {
+        id: userProfile.id,
+        name: userProfile.full_name
+      } : undefined,
+      isLatest: data.is_latest || false
+    }
+    
+    return NextResponse.json({ data: transformedData }, { status: 201 })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },

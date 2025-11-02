@@ -1,6 +1,44 @@
 import { TrackingStatus } from '@/types'
+import { 
+  ALL_LOCATIONS, 
+  searchLocations, 
+  calculateDistance as calcDistFromCoords,
+  LocationData,
+  MAJOR_PORTS,
+  MAJOR_AIRPORTS,
+  MAJOR_CITIES
+} from './location-data'
 
 export const trackingUtils = {
+  // Search locations from dataset
+  searchLocations(query: string, types?: LocationData['type'][]): LocationData[] {
+    return searchLocations(query, types)
+  },
+
+  // Get all ports
+  getAllPorts(): LocationData[] {
+    return MAJOR_PORTS
+  },
+
+  // Get all airports
+  getAllAirports(): LocationData[] {
+    return MAJOR_AIRPORTS
+  },
+
+  // Get all cities
+  getAllCities(): LocationData[] {
+    return MAJOR_CITIES
+  },
+
+  // Get location by name (fuzzy match)
+  findLocationByName(name: string): LocationData | undefined {
+    const lowerName = name.toLowerCase()
+    return ALL_LOCATIONS.find(loc => 
+      loc.name.toLowerCase() === lowerName ||
+      loc.searchTerms.some(term => term === lowerName)
+    )
+  },
+
   getStatusDisplayName(status: TrackingStatus): string {
     const statusNames: Record<TrackingStatus, string> = {
       in_vault: 'In Vault',
@@ -55,16 +93,8 @@ export const trackingUtils = {
   },
 
   calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    // Haversine formula to calculate distance between two points
-    const R = 6371 // Earth's radius in kilometers
-    const dLat = this.toRadians(lat2 - lat1)
-    const dLon = this.toRadians(lon2 - lon1)
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    return R * c
+    // Use the real Haversine formula from location-data
+    return calcDistFromCoords({ lat: lat1, lng: lon1 }, { lat: lat2, lng: lon2 })
   },
 
   toRadians(degrees: number): number {
@@ -79,28 +109,49 @@ export const trackingUtils = {
   },
 
   getLocationSuggestions(): string[] {
+    // Return mix of real locations and operational statuses
     return [
-      'G1 London Vault',
-      'G1 New York Vault', 
-      'G1 Zurich Vault',
-      'G1 Singapore Vault',
-      'G1 Hong Kong Vault',
-      'G1 Dubai Vault',
-      'G1 Geneva Vault',
-      'G1 Tokyo Vault',
-      'Client Premises',
-      'Heathrow Airport',
-      'JFK Airport',
-      'Changi Airport',
-      'Zurich Airport',
+      // Major Ports
+      'Port of Shanghai',
+      'Port of Singapore',
+      'Port of Rotterdam',
+      'Port of Los Angeles',
+      'Port of Hong Kong',
+      'Port of Hamburg',
+      'Port of Antwerp',
+      'Port of Jebel Ali',
+      // Major Airports
+      'Shanghai Pudong International Airport',
+      'Singapore Changi Airport',
+      'London Heathrow Airport',
       'Dubai International Airport',
-      'Customs Office',
-      'Secure Transport Vehicle',
-      'Partner Facility',
-      'Insurance Facility',
-      'Bank Vault',
-      'Temporary Storage'
+      'Los Angeles International Airport',
+      'Hong Kong International Airport',
+      // Transit Statuses
+      'In Transit - Sea',
+      'In Transit - Air',
+      'In Transit - Road',
+      'In Transit - Rail',
+      'Customs Clearance',
+      'Border Crossing',
+      // Facilities
+      'Distribution Center',
+      'Warehouse - Main',
+      'Consolidation Point',
+      'Container Yard',
+      'Free Trade Zone',
+      'Bonded Warehouse',
+      'G1 Vault',
+      'Client Location'
     ]
+  },
+
+  // Get popular locations by type
+  getPopularLocationsByType(type: LocationData['type'], limit: number = 10): LocationData[] {
+    const locations = type === 'port' ? MAJOR_PORTS : 
+                     type === 'airport' ? MAJOR_AIRPORTS : 
+                     MAJOR_CITIES
+    return locations.slice(0, limit)
   },
 
   getTransportMethods(): string[] {

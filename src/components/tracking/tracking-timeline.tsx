@@ -1,1 +1,332 @@
-'use client'\n\nimport { useState, useEffect } from 'react'\nimport { Button } from '@/components/ui/button'\nimport { Badge } from '@/components/ui/badge'\nimport { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Input } from '@/components/ui/input'\nimport { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'\nimport { \n  MapPin, \n  Clock, \n  User, \n  Navigation, \n  Filter, \n  Loader2, \n  AlertTriangle, \n  Plus, \n  Eye, \n  Route\n } from 'lucide-react'\nimport { SKRWithRelations, TrackingRecord } from '@/types'\nimport { trackingUtils } from '@/lib/tracking-utils'\nimport { formatDateTime } from '@/lib/utils'\nimport { LocationUpdateForm } from './location-update-form'\n\ninterface TrackingTimelineProps { \n  skr: SKRWithRelations\n  showAddButton ?: boolean\n } \n\nexport function TrackingTimeline({ skr, showAddButton = true }: TrackingTimelineProps) { \n  const [trackingRecords, setTrackingRecords] = useState<TrackingRecord[]>([]) \n  const [loading, setLoading] = useState(true) \n  const [error, setError] = useState('') \n  const [showAddForm, setShowAddForm] = useState(false) \n  const [statusFilter, setStatusFilter] = useState('') \n  const [locationFilter, setLocationFilter] = useState('') \n\n  useEffect(() => { \n    fetchTrackingHistory() \n }, [skr.id, statusFilter, locationFilter]) \n\n  const fetchTrackingHistory = async () => { \n    setLoading(true) \n    try { \n      const params = new URLSearchParams({ \n        ...(statusFilter && { status: statusFilter }), \n        ...(locationFilter && { location: locationFilter }) \n }) \n      \n      const response = await fetch(`/api/skrs/${skr.id}/tracking?${params}`) \n      const result = await response.json() \n      \n      if (!response.ok) { \n        throw new Error(result.error || 'Failed to fetch tracking history') \n } \n      \n      setTrackingRecords(result.data) \n } catch (error) { \n      setError(error instanceof Error ? error.message : 'An error occurred') \n } finally { \n      setLoading(false) \n } \n }\n\n  const handleUpdate = () => { \n    setShowAddForm(false) \n    fetchTrackingHistory() \n }\n\n  const clearFilters = () => { \n    setStatusFilter('') \n    setLocationFilter('') \n }\n\n  if (error) { \n    return (\n<Card>\n < CardContent className =\"p-6\">\n          <div className=\"text-center text-red-600\">\n            <AlertTriangle className=\"h-12 w-12 mx-auto mb-4 opacity-50\" />\n            <p>{error}</p>\n            <Button onClick={fetchTrackingHistory} className=\"mt-4\">\n              Try Again\n            </Button>\n          </div>\n        </CardContent>\n      </Card>\n    )\n  }\n\n  return (\n    <div className=\"space-y-6\">\n      {/* Header */}\n      <div className=\"flex items-center justify-between\">\n        <div>\n          <h3 className=\"text-lg font-semibold\">Tracking History</h3>\n          <p className=\"text-sm text-muted-foreground\">\n            {trackingRecords.length} location update{trackingRecords.length !== 1 ? 's' : ''}\n          </p>\n        </div>\n        {showAddButton && (\n          <Button \n            onClick={() => setShowAddForm(true)}\n            className=\"bg-g1-primary hover:bg-g1-primary/90\"\n          >\n            <Plus className=\"mr-2 h-4 w-4\" />\n            Add Location\n          </Button>\n        )}\n      </div>\n\n      {/* Add Location Form */}\n      {showAddForm && (\n        <LocationUpdateForm\n          skr={skr}\n          onUpdate={handleUpdate}\n          onCancel={() => setShowAddForm(false)}\n        />\n      )}\n\n      {/* Filters */}\n      <Card>\n        <CardHeader>\n          <CardTitle className=\"flex items-center gap-2\">\n            <Filter className=\"h-5 w-5\" />\n            Filters\n          </CardTitle>\n        </CardHeader>\n        <CardContent>\n          <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Status</label>\n              <Select value={statusFilter} onValueChange={setStatusFilter}>\n                <SelectTrigger>\n                  <SelectValue placeholder=\"All statuses\" />\n                </SelectTrigger>\n                <SelectContent>\n                  <SelectItem value=\"\">All Statuses</SelectItem>\n                  {trackingUtils.getAllStatuses().map((status) => (\n                    <SelectItem key={status.value} value={status.value}>\n                      {status.label}\n                    </SelectItem>\n                  ))}\n                </SelectContent>\n              </Select>\n            </div>\n\n            <div className=\"space-y-2\">\n              <label className=\"text-sm font-medium\">Location</label>\n              <Input\n                placeholder=\"Filter by location\"\n                value={locationFilter}\n                onChange={(e) => setLocationFilter(e.target.value)}\n              />\n            </div>\n\n            <div className=\"flex items-end\">\n              {(statusFilter || locationFilter) && (\n                <Button variant=\"outline\" onClick={clearFilters}>\n                  Clear Filters\n                </Button>\n              )}\n            </div>\n          </div>\n        </CardContent>\n      </Card>\n\n      {/* Timeline */}\n      <Card>\n        <CardContent className=\"p-0\">\n          {loading ? (\n            <div className=\"flex items-center justify-center p-8\">\n              <Loader2 className=\"h-8 w-8 animate-spin\" />\n            </div>\n          ) : trackingRecords.length === 0 ? (\n            <div className=\"text-center p-8\">\n              <MapPin className=\"h-12 w-12 mx-auto mb-4 text-muted-foreground\" />\n              <h3 className=\"text-lg font-semibold mb-2\">No Tracking Records</h3>\n              <p className=\"text-muted-foreground mb-4\">\n                {statusFilter || locationFilter\n                  ? 'No tracking records match your current filters'\n                  : 'No location updates have been recorded for this SKR yet'\n                }\n              </p>\n              {showAddButton && (\n                <Button \n                  onClick={() => setShowAddForm(true)}\n                  className=\"bg-g1-primary hover:bg-g1-primary/90\"\n                >\n                  <Plus className=\"mr-2 h-4 w-4\" />\n                  Add First Location\n                </Button>\n              )}\n            </div>\n          ) : (\n            <div className=\"p-6\">\n              <div className=\"relative\">\n                {/* Timeline line */}\n                <div className=\"absolute left-6 top-0 bottom-0 w-0.5 bg-border\" />\n                \n                {/* Timeline items */}\n                <div className=\"space-y-6\">\n                  {trackingRecords.map((record, index) => (\n                    <div key={record.id} className=\"relative flex items-start gap-4\">\n                      {/* Timeline dot */}\n                      <div className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${\n                        record.isLatest \n                          ? 'bg-g1-primary border-g1-primary text-white' \n                          : 'bg-background border-border'\n                      }`}>\n                        <MapPin className=\"h-5 w-5\" />\n                      </div>\n                      \n                      {/* Content */}\n                      <div className=\"flex-1 min-w-0\">\n                        <div className=\"flex items-start justify-between\">\n                          <div className=\"space-y-2\">\n                            <div className=\"flex items-center gap-2\">\n                              <h4 className=\"font-semibold\">{record.location}</h4>\n                              {record.isLatest && (\n                                <Badge variant=\"secondary\">Current</Badge>\n                              )}\n                              <Badge className={trackingUtils.getStatusColor(record.status)}>\n                                {trackingUtils.getStatusDisplayName(record.status)}\n                              </Badge>\n                            </div>\n                            \n                            <div className=\"flex items-center gap-4 text-sm text-muted-foreground\">\n                              <div className=\"flex items-center gap-1\">\n                                <Clock className=\"h-4 w-4\" />\n                                {formatDateTime(record.created_at)}\n                              </div>\n                              \n                              {record.recorded_by_user && (\n                                <div className=\"flex items-center gap-1\">\n                                  <User className=\"h-4 w-4\" />\n                                  {record.recorded_by_user.name}\n                                </div>\n                              )}\n                              \n                              {record.latitude && record.longitude && (\n                                <div className=\"flex items-center gap-1\">\n                                  <Navigation className=\"h-4 w-4\" />\n                                  {trackingUtils.formatCoordinates(record.latitude, record.longitude)}\n                                </div>\n                              )}\n                            </div>\n                            \n                            {record.notes && (\n                              <div className=\"text-sm bg-muted p-3 rounded-lg\">\n                                {record.notes}\n                              </div>\n                            )}\n                            \n                            {record.distanceTraveled && (\n                              <div className=\"flex items-center gap-1 text-sm text-muted-foreground\">\n                                <Route className=\"h-4 w-4\" />\n                                {record.distanceTraveled.toFixed(1)} km from previous location\n                              </div>\n                            )}\n                          </div>\n                          \n                          <div className=\"flex items-center gap-2\">\n                            {record.latitude && record.longitude && (\n                              <Button variant=\"ghost\" size=\"sm\">\n                                <Eye className=\"h-4 w-4\" />\n                              </Button>\n                            )}\n                          </div>\n                        </div>\n                      </div>\n                    </div>\n                  ))}\n                </div>\n              </div>\n            </div>\n          )}\n        </CardContent>\n      </Card>\n\n      {/* Summary Stats */}\n      {trackingRecords.length > 0 && (\n        <Card>\n          <CardHeader>\n            <CardTitle>Tracking Summary</CardTitle>\n          </CardHeader>\n          <CardContent>\n            <div className=\"grid grid-cols-1 md:grid-cols-4 gap-4\">\n              <div className=\"text-center\">\n                <div className=\"text-2xl font-bold\">{trackingRecords.length}</div>\n                <div className=\"text-sm text-muted-foreground\">Total Updates</div>\n              </div>\n              \n              <div className=\"text-center\">\n                <div className=\"text-2xl font-bold\">\n                  {new Set(trackingRecords.map(r => r.location)).size}\n                </div>\n                <div className=\"text-sm text-muted-foreground\">Unique Locations</div>\n              </div>\n              \n              <div className=\"text-center\">\n                <div className=\"text-2xl font-bold\">\n                  {trackingRecords.filter(r => r.latitude && r.longitude).length}\n                </div>\n                <div className=\"text-sm text-muted-foreground\">GPS Coordinates</div>\n              </div>\n              \n              <div className=\"text-center\">\n                <div className=\"text-2xl font-bold\">\n                  {trackingRecords.reduce((total, record) => \n                    total + (record.distanceTraveled || 0), 0\n                  ).toFixed(0)}\n                </div>\n                <div className=\"text-sm text-muted-foreground\">Total Distance (km)</div>\n              </div>\n            </div>\n          </CardContent>\n        </Card>\n      )}\n    </div>\n  )\n}"
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { 
+  MapPin, 
+  Clock, 
+  User, 
+  Navigation, 
+  Filter, 
+  Loader2, 
+  AlertTriangle, 
+  Plus, 
+  Eye, 
+  Route
+} from 'lucide-react'
+import { SKRWithRelations, TrackingRecord } from '@/types'
+import { trackingUtils } from '@/lib/tracking-utils'
+import { formatDateTime } from '@/lib/utils'
+import { LocationUpdateForm } from './location-update-form'
+
+interface TrackingTimelineProps { 
+  skr: SKRWithRelations
+  showAddButton?: boolean
+}
+
+export function TrackingTimeline({ skr, showAddButton = true }: TrackingTimelineProps) { 
+  const [trackingRecords, setTrackingRecords] = useState<TrackingRecord[]>([]) 
+  const [loading, setLoading] = useState(true) 
+  const [error, setError] = useState('') 
+  const [showAddForm, setShowAddForm] = useState(false) 
+  const [statusFilter, setStatusFilter] = useState('') 
+  const [locationFilter, setLocationFilter] = useState('')
+  
+  // Use ref to track if fetch is in progress to prevent duplicate calls
+  const fetchingRef = useRef(false)
+
+  const fetchTrackingHistory = async () => {
+    // Prevent duplicate simultaneous calls
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    
+    setLoading(true) 
+    try { 
+      const params = new URLSearchParams({ 
+        ...(statusFilter && { status: statusFilter }), 
+        ...(locationFilter && { location: locationFilter }) 
+      }) 
+      
+      const response = await fetch(`/api/skrs/${skr.id}/tracking?${params}`) 
+      const result = await response.json() 
+      
+      if (!response.ok) { 
+        throw new Error(result.error || 'Failed to fetch tracking history') 
+      } 
+      
+      setTrackingRecords(result.data || []) 
+    } catch (error) { 
+      setError(error instanceof Error ? error.message : 'An error occurred') 
+    } finally { 
+      setLoading(false)
+      fetchingRef.current = false
+    } 
+  }
+
+  useEffect(() => {
+    fetchTrackingHistory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skr.id, statusFilter, locationFilter])
+
+  const handleUpdate = () => { 
+    setShowAddForm(false) 
+    fetchTrackingHistory() 
+  }
+
+  const clearFilters = () => { 
+    setStatusFilter('') 
+    setLocationFilter('') 
+  }
+
+  if (error) { 
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-600">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>{error}</p>
+            <Button onClick={fetchTrackingHistory} className="mt-4">
+              Try Again
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Tracking History</h3>
+          <p className="text-sm text-muted-foreground">
+            {trackingRecords.length} location update{trackingRecords.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        {showAddButton && (
+          <Button 
+            onClick={() => setShowAddForm(true)}
+            className="bg-g1-primary hover:bg-g1-primary/90"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Location
+          </Button>
+        )}
+      </div>
+
+      {/* Add Location Form */}
+      {showAddForm && (
+        <LocationUpdateForm
+          skr={skr}
+          onUpdate={handleUpdate}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+              <Select value={statusFilter || 'all'} onValueChange={(value) => setStatusFilter(value === 'all' ? '' : value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {trackingUtils.getAllStatuses().map((status) => (
+                    <SelectItem key={status.value} value={status.value}>
+                      {status.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Location</label>
+              <Input
+                placeholder="Filter by location"
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-end">
+              {(statusFilter || locationFilter) && (
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Timeline */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : trackingRecords.length === 0 ? (
+            <div className="text-center p-8">
+              <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">No Tracking Records</h3>
+              <p className="text-muted-foreground mb-4">
+                {statusFilter || locationFilter
+                  ? 'No tracking records match your current filters'
+                  : 'No location updates have been recorded for this SKR yet'
+                }
+              </p>
+              {showAddButton && (
+                <Button 
+                  onClick={() => setShowAddForm(true)}
+                  className="bg-g1-primary hover:bg-g1-primary/90"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add First Location
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="p-6">
+              <div className="relative">
+                {/* Timeline line */}
+                <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border" />
+                
+                {/* Timeline items */}
+                <div className="space-y-6">
+                  {trackingRecords.map((record, index) => (
+                    <div key={record.id} className="relative flex items-start gap-4">
+                      {/* Timeline dot */}
+                      <div className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${
+                        record.isLatest 
+                          ? 'bg-g1-primary border-g1-primary text-white' 
+                          : 'bg-background border-border'
+                      }`}>
+                        <MapPin className="h-5 w-5" />
+                      </div>
+                      
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-semibold">{record.location}</h4>
+                              {record.isLatest && (
+                                <Badge variant="secondary">Current</Badge>
+                              )}
+                              <Badge className={trackingUtils.getStatusColor(record.status)}>
+                                {trackingUtils.getStatusDisplayName(record.status)}
+                              </Badge>
+                            </div>
+                            
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                {formatDateTime(record.created_at)}
+                              </div>
+                              
+                              {record.recorded_by_user && (
+                                <div className="flex items-center gap-1">
+                                  <User className="h-4 w-4" />
+                                  {record.recorded_by_user.name}
+                                </div>
+                              )}
+                              
+                              {record.latitude && record.longitude && (
+                                <div className="flex items-center gap-1">
+                                  <Navigation className="h-4 w-4" />
+                                  {trackingUtils.formatCoordinates(record.latitude, record.longitude)}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {record.notes && (
+                              <div className="text-sm bg-muted p-3 rounded-lg">
+                                {record.notes}
+                              </div>
+                            )}
+                            
+                            {record.distanceTraveled && (
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <Route className="h-4 w-4" />
+                                {record.distanceTraveled.toFixed(1)} km from previous location
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            {record.latitude && record.longitude && (
+                              <Button variant="ghost" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Summary Stats */}
+      {trackingRecords.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Tracking Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold">{trackingRecords.length}</div>
+                <div className="text-sm text-muted-foreground">Total Updates</div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-2xl font-bold">
+                  {new Set(trackingRecords.map(r => r.location)).size}
+                </div>
+                <div className="text-sm text-muted-foreground">Unique Locations</div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-2xl font-bold">
+                  {trackingRecords.filter(r => r.latitude && r.longitude).length}
+                </div>
+                <div className="text-sm text-muted-foreground">GPS Coordinates</div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-2xl font-bold">
+                  {trackingRecords.reduce((total, record) => 
+                    total + (record.distanceTraveled || 0), 0
+                  ).toFixed(0)}
+                </div>
+                <div className="text-sm text-muted-foreground">Total Distance (km)</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
