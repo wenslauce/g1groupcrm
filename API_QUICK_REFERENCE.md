@@ -1025,9 +1025,9 @@ curl -X POST \
 ## Support
 
 For API issues or questions:
-- **Technical Support**: dev@g1group.com
-- **Documentation**: https://docs.g1group.com
-- **Status Page**: https://status.g1group.com
+- **Technical Support**: dev@g1groupofcompanies.com
+- **Documentation**: https://docs.g1groupofcompanies.com
+- **Status Page**: https://status.g1groupofcompanies.com
 
 ---
 

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     // Return default settings if none exist
     const defaultSettings = {
       company_name: 'G1 Group',
-      company_email: 'admin@g1group.com',
+      company_email: 'admin@g1groupofcompanies.com',
       company_phone: '',
       company_address: '',
       timezone: 'UTC',

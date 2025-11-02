@@ -227,7 +227,7 @@ export function generateSKRPDF(skr: SKRData): Buffer {
         minute: '2-digit'
     })}`
     doc.text(footerText, 105, 280, { align: 'center' })
-    doc.text(`For verification, visit: https://verify.g1group.com/skr/${skr.skr_number}`, 105, 285, { align: 'center' })
+    doc.text(`For verification, visit: https://verify.g1groupofcompanies.com/skr/${skr.skr_number}`, 105, 285, { align: 'center' })
 
     // Return as buffer
     return Buffer.from(doc.output('arraybuffer'))

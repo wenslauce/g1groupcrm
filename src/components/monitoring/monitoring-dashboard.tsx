@@ -69,7 +69,7 @@ export function MonitoringDashboard() {
           description: 'Successful admin login',
           timestamp: '2 minutes ago',
           severity: 'low',
-          user: 'admin@g1group.com'
+          user: 'admin@g1groupofcompanies.com'
         },
         {
           id: '2',

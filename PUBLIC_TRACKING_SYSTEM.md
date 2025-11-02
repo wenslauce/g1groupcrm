@@ -295,7 +295,7 @@ The PDF generator includes verification links:
 
 ```typescript
 doc.text(
-  `For verification, visit: https://verify.g1group.com/skr/${skr.skr_number}`,
+  `For verification, visit: https://verify.g1groupofcompanies.com/skr/${skr.skr_number}`,
   105, 285,
   { align: 'center' }
 )
